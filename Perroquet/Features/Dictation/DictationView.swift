@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import SwiftUI
 
@@ -6,16 +7,37 @@ struct DictationView: View {
     @Environment(DictationController.self) private var controller
     @Environment(Transcriber.self) private var transcriber
     @Environment(Permissions.self) private var permissions
+    @Environment(MicrophoneSelection.self) private var microphone
+    @Environment(LaunchAtLogin.self) private var launchAtLogin
 
     var body: some View {
         @Bindable var controller = controller
         Form {
+            Section("General") {
+                Toggle(
+                    "Launch at login",
+                    isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) }))
+                if let message = launchAtLogin.errorMessage {
+                    Text(message).foregroundStyle(.red)
+                }
+            }
             Section("Shortcut") {
                 KeyboardShortcuts.Recorder("Dictation shortcut", name: .toggleDictation)
+                KeyboardShortcuts.Recorder("Cancel shortcut", name: .cancelDictation) { _ in
+                    DictationHotkey.syncCancelShortcut(with: controller.state)
+                }
                 Picker("Mode", selection: $controller.mode) {
                     ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+            }
+            Section("Microphone") {
+                Picker(
+                    "Input device",
+                    selection: Binding(get: { microphone.selectedUID }, set: { microphone.select($0) })
+                ) {
+                    ForEach(microphone.options) { Text($0.title).tag($0.uid) }
+                }
             }
             Section("Status") {
                 LabeledContent("Model", value: Transcriber.modelDisplayName)
@@ -43,16 +65,24 @@ struct DictationView: View {
             }
             Section("Last dictation") {
                 LastDictationCard(style: .formRow)
-                    .listRowInsets(EdgeInsets())
             }
         }
         .formStyle(.grouped)
+        .onAppear(perform: refreshSettings)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshSettings()
+        }
         .task {
             while !Task.isCancelled {
                 permissions.refresh()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
+    }
+
+    private func refreshSettings() {
+        launchAtLogin.refresh()
+        microphone.refresh()
     }
 
     @ViewBuilder

@@ -28,7 +28,9 @@ final class DictationController {
     private static let modeDefaultsKey = "recordingMode"
 
     /// Current phase of the pipeline.
-    private(set) var state: State = .idle
+    private(set) var state: State = .idle {
+        didSet { if state != oldValue { onStateChange?(state) } }
+    }
     /// Text of the last non-empty dictation.
     private(set) var lastText = ""
     /// Last problem or reason a shortcut press was ignored.
@@ -44,6 +46,12 @@ final class DictationController {
     private let paster: TextPasting
     private let store: RecordingStore
     private let defaults: UserDefaults
+    /// Called on the main actor each time `state` changes.
+    @ObservationIgnored var onStateChange: ((State) -> Void)?
+    /// Incremented when a dictation starts or is cancelled, so a stale pipeline cannot touch the current one.
+    @ObservationIgnored private var generation = 0
+    /// Test hook: completes once the recorder of the previous dictation is released; a new recording waits for it.
+    @ObservationIgnored private(set) var recorderRelease: Task<Void, Never>?
     /// Test hook: pending microphone start, kept so that a quick stop waits for it.
     @ObservationIgnored private(set) var recordingStart: Task<Void, Error>?
     /// Test hook: in-flight transcribe, paste and save task of the last dictation.
@@ -91,53 +99,84 @@ final class DictationController {
             return
         }
         message = nil
+        generation += 1
+        let id = generation
+        let release = recorderRelease
         state = .recording
         recordingStart = Task { [weak self, recorder] in
+            await release?.value
             do {
                 try await recorder.start()
             } catch {
-                self?.recordingFailed(error)
+                self?.recordingFailed(error, generation: id)
                 throw error
             }
         }
     }
 
-    private func recordingFailed(_ error: Error) {
-        guard state == .recording else { return }
+    /// Abandons the dictation in progress: nothing is pasted, stored or shown. No-op when idle.
+    func cancel() {
+        switch state {
+        case .idle:
+            return
+        case .recording:
+            let start = recordingStart
+            recorderRelease = Task { [recorder] in
+                _ = try? await start?.value
+                _ = recorder.stop()
+            }
+        case .transcribing:
+            break
+        }
+        generation += 1
+        state = .idle
+    }
+
+    private func recordingFailed(_ error: Error, generation id: Int) {
+        guard state == .recording, id == generation else { return }
         message = "Could not start recording: \(error.localizedDescription)"
         state = .idle
     }
 
     private func endRecording() {
         state = .transcribing
+        let id = generation
+        let start = recordingStart
+        let stopped = Task { [recorder] () -> [Float]? in
+            do {
+                try await start?.value
+            } catch {
+                if id == generation { message = "Could not start recording: \(error.localizedDescription)" }
+                return nil
+            }
+            return recorder.stop()
+        }
+        recorderRelease = Task { _ = await stopped.value }
         pipeline = Task {
-            let finished = await process()
-            state = .idle
+            let finished = await process(await stopped.value, generation: id)
+            if id == generation { state = .idle }
             if let finished { await save(finished.samples, finished.record) }
         }
     }
 
-    private func process() async -> (samples: [Float], record: TranscriptionRecord)? {
-        do {
-            try await recordingStart?.value
-        } catch {
-            message = "Could not start recording: \(error.localizedDescription)"
-            return nil
-        }
-        let samples = recorder.stop()
-        guard !samples.isEmpty else { return nil }
+    private func process(
+        _ samples: [Float]?, generation id: Int
+    ) async -> (samples: [Float], record: TranscriptionRecord)? {
+        guard let samples, !samples.isEmpty else { return nil }
 
         var record: TranscriptionRecord
         do {
             record = try await transcriber.transcribe(samples)
         } catch {
-            message = "Transcription failed: \(error.localizedDescription)"
+            if id == generation { message = "Transcription failed: \(error.localizedDescription)" }
             return nil
         }
+        guard id == generation else { return nil }
         let text = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         record.text = text
 
+        state = .idle
         lastText = text
         do {
             try await paster.paste(text)

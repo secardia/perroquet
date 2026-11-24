@@ -1,7 +1,8 @@
 import AVFoundation
+import CoreAudio
 import Synchronization
 
-/// Records the default microphone as 16 kHz mono Float32 samples.
+/// Records the chosen microphone, or the system default, as 16 kHz mono Float32 samples.
 @MainActor
 final class AudioRecorder: AudioRecording {
     /// Reasons recording cannot start.
@@ -24,6 +25,12 @@ final class AudioRecorder: AudioRecording {
         commonFormat: .pcmFormatFloat32, sampleRate: Double(DatasetStore.sampleRate), channels: 1, interleaved: false)!
     private let buffer = SampleBuffer()
     private var engine: AVAudioEngine?
+    private let selectedUID: () -> String?
+
+    /// `selectedUID` returns the UID of the chosen microphone; nil or an unplugged device means the system default.
+    init(selectedUID: @escaping () -> String? = { nil }) {
+        self.selectedUID = selectedUID
+    }
 
     /// Starts capturing, asking for microphone access when needed.
     func start() async throws {
@@ -32,6 +39,7 @@ final class AudioRecorder: AudioRecording {
 
         let engine = AVAudioEngine()
         let input = engine.inputNode
+        useSelectedDevice(on: input)
         let inputFormat = input.outputFormat(forBus: 0)
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw RecorderError.unsupportedFormat
@@ -49,6 +57,15 @@ final class AudioRecorder: AudioRecording {
         engine?.stop()
         engine = nil
         return buffer.take()
+    }
+
+    private func useSelectedDevice(on input: AVAudioInputNode) {
+        guard let uid = selectedUID(), var device = InputDevices.deviceID(forUID: uid), let unit = input.audioUnit else {
+            return
+        }
+        AudioUnitSetProperty(
+            unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &device,
+            UInt32(MemoryLayout<AudioDeviceID>.size))
     }
 
     private nonisolated static func makeTap(
