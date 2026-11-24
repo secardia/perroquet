@@ -63,9 +63,6 @@ struct DictationView: View {
                     Text(message).foregroundStyle(.red)
                 }
             }
-            Section("Last dictation") {
-                LastDictationCard(style: .formRow)
-            }
         }
         .formStyle(.grouped)
         .onAppear(perform: refreshSettings)
