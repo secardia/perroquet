@@ -74,7 +74,7 @@ final class DictationController {
         paster: TextPasting,
         store: RecordingStore,
         defaults: UserDefaults = .standard,
-        cancelledDuration: Duration = .seconds(1)
+        cancelledDuration: Duration = .milliseconds(500)
     ) {
         self.recorder = recorder
         self.transcriber = transcriber
