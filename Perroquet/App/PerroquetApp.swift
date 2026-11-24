@@ -39,7 +39,7 @@ struct PerroquetApp: App {
             MenuBarContent()
                 .environment(controller)
         } label: {
-            Image(systemName: controller.state.menuBarSymbol)
+            Image(systemName: controller.menuBarSymbol)
         }
         .menuBarExtraStyle(.window)
 

@@ -27,12 +27,19 @@ final class DictationController {
     /// UserDefaults key under which the recording mode is stored.
     private static let modeDefaultsKey = "recordingMode"
 
+    /// SF Symbol shown in the menu bar: the cross right after a cancel, otherwise the one of `state`.
+    var menuBarSymbol: String {
+        state == .idle && showsCancelled ? "xmark" : state.menuBarSymbol
+    }
+
     /// Current phase of the pipeline.
     private(set) var state: State = .idle {
         didSet { if state != oldValue { onStateChange?(state) } }
     }
     /// Text of the last non-empty dictation.
     private(set) var lastText = ""
+    /// Whether a cancelled dictation is still being acknowledged in the menu bar.
+    private(set) var showsCancelled = false
     /// Last problem or reason a shortcut press was ignored.
     private(set) var message: String?
 
@@ -46,6 +53,7 @@ final class DictationController {
     private let paster: TextPasting
     private let store: RecordingStore
     private let defaults: UserDefaults
+    private let cancelledDuration: Duration
     /// Called on the main actor each time `state` changes.
     @ObservationIgnored var onStateChange: ((State) -> Void)?
     /// Incremented when a dictation starts or is cancelled, so a stale pipeline cannot touch the current one.
@@ -54,6 +62,8 @@ final class DictationController {
     @ObservationIgnored private(set) var recorderRelease: Task<Void, Never>?
     /// Test hook: pending microphone start, kept so that a quick stop waits for it.
     @ObservationIgnored private(set) var recordingStart: Task<Void, Error>?
+    /// Test hook: timer ending the cancelled acknowledgement.
+    @ObservationIgnored private(set) var cancelledMark: Task<Void, Never>?
     /// Test hook: in-flight transcribe, paste and save task of the last dictation.
     @ObservationIgnored private(set) var pipeline: Task<Void, Never>?
 
@@ -63,13 +73,15 @@ final class DictationController {
         transcriber: SpeechTranscribing,
         paster: TextPasting,
         store: RecordingStore,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        cancelledDuration: Duration = .seconds(1)
     ) {
         self.recorder = recorder
         self.transcriber = transcriber
         self.paster = paster
         self.store = store
         self.defaults = defaults
+        self.cancelledDuration = cancelledDuration
         lastText = store.latestText() ?? ""
         mode = defaults.string(forKey: Self.modeDefaultsKey).flatMap(RecordingMode.init) ?? .tap
     }
@@ -99,6 +111,8 @@ final class DictationController {
             return
         }
         message = nil
+        cancelledMark?.cancel()
+        showsCancelled = false
         generation += 1
         let id = generation
         let release = recorderRelease
@@ -130,6 +144,13 @@ final class DictationController {
         }
         generation += 1
         state = .idle
+        showsCancelled = true
+        cancelledMark?.cancel()
+        cancelledMark = Task { [cancelledDuration] in
+            try? await Task.sleep(for: cancelledDuration)
+            guard !Task.isCancelled else { return }
+            showsCancelled = false
+        }
     }
 
     private func recordingFailed(_ error: Error, generation id: Int) {

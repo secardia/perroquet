@@ -40,6 +40,7 @@ struct ShortcutRecorder: View {
     @State private var shortcut: KeyboardShortcuts.Shortcut?
     @State private var isCapturing = false
     @State private var monitor: Any?
+    @State private var releaseMonitor: Any?
     @State private var window: NSWindow?
     @State private var frame = CGRect.zero
 
@@ -54,9 +55,13 @@ struct ShortcutRecorder: View {
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         }
         .onAppear { shortcut = KeyboardShortcuts.getShortcut(for: name) }
-        .onDisappear(perform: stop)
+        .onDisappear {
+            stop()
+            removeReleaseMonitor()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             stop()
+            removeReleaseMonitor()
         }
     }
 
@@ -65,6 +70,7 @@ struct ShortcutRecorder: View {
     }
 
     private func start() {
+        removeReleaseMonitor()
         isCapturing = true
         window = NSApp.keyWindow
         onCapturing(true)
@@ -76,6 +82,7 @@ struct ShortcutRecorder: View {
     private func swallows(_ event: NSEvent) -> Bool {
         if event.type == .keyDown {
             capture(event)
+            if !isCapturing { swallowRepeats(of: event.keyCode) }
             return true
         }
         guard event.window === window else {
@@ -86,6 +93,21 @@ struct ShortcutRecorder: View {
         let point = CGPoint(x: event.locationInWindow.x, y: height - event.locationInWindow.y)
         if !frame.contains(point) { stop() }
         return false
+    }
+
+    private func swallowRepeats(of keyCode: UInt16) {
+        removeReleaseMonitor()
+        releaseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            guard event.keyCode == keyCode else { return event }
+            if event.type == .keyDown, event.isARepeat { return nil }
+            MainActor.assumeIsolated { removeReleaseMonitor() }
+            return event
+        }
+    }
+
+    private func removeReleaseMonitor() {
+        if let releaseMonitor { NSEvent.removeMonitor(releaseMonitor) }
+        releaseMonitor = nil
     }
 
     private func capture(_ event: NSEvent) {
@@ -103,7 +125,6 @@ struct ShortcutRecorder: View {
         {
             KeyboardShortcuts.setShortcut(captured, for: name)
         } else {
-            NSSound.beep()
             return
         }
         shortcut = KeyboardShortcuts.getShortcut(for: name)

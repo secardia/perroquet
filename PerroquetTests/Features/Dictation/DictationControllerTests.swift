@@ -59,14 +59,16 @@ final class DictationControllerTests: XCTestCase {
     }
 
     private func make(
-        mode: RecordingMode? = nil, latest: String? = nil, defaults: UserDefaults? = nil
+        mode: RecordingMode? = nil, latest: String? = nil, defaults: UserDefaults? = nil,
+        cancelledDuration: Duration = .seconds(1)
     ) -> (DictationController, Fakes) {
         let fakes = Fakes()
         fakes.latest = latest
         let defaults = defaults ?? makeDefaults()
         let controller = DictationController(
             recorder: Recorder(fakes: fakes), transcriber: Transcribe(fakes: fakes), paster: Paste(fakes: fakes),
-            store: Store(fakes: fakes), defaults: defaults)
+            store: Store(fakes: fakes), defaults: defaults,
+            cancelledDuration: cancelledDuration)
         if let mode { controller.mode = mode }
         return (controller, fakes)
     }
@@ -279,5 +281,29 @@ final class DictationControllerTests: XCTestCase {
         await settle(controller)
         XCTAssertEqual(fakes.pasted, ["hello"])
         XCTAssertEqual(fakes.events, ["start", "stop", "start", "stop"])
+    }
+
+    func testCancelShowsCrossThenIdleIcon() async {
+        let (controller, _) = make(mode: .tap, cancelledDuration: .milliseconds(20))
+        controller.hotkeyDown()
+        controller.cancel()
+        XCTAssertEqual(controller.state, .idle)
+        XCTAssertEqual(controller.menuBarSymbol, "xmark")
+        await controller.cancelledMark?.value
+        XCTAssertEqual(controller.menuBarSymbol, "waveform")
+    }
+
+    func testNewDictationDuringCrossShowsRecordingAndTimerDoesNotClobber() async {
+        let (controller, _) = make(mode: .tap, cancelledDuration: .milliseconds(20))
+        controller.hotkeyDown()
+        controller.cancel()
+        let mark = controller.cancelledMark
+        controller.hotkeyDown()
+        XCTAssertEqual(controller.menuBarSymbol, "mic.fill")
+        await mark?.value
+        XCTAssertEqual(controller.menuBarSymbol, "mic.fill")
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(controller.menuBarSymbol, "waveform")
     }
 }
