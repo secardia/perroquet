@@ -12,6 +12,8 @@ extension KeyboardShortcuts.Name {
 
 /// Connects the global shortcut to a controller.
 enum DictationHotkey {
+    @MainActor private static var isCapturing = false
+
     /// Routes key down and key up events of `toggleDictation` to `controller`, and enables
     /// `cancelDictation` only while `controller` is recording or transcribing.
     @MainActor
@@ -29,9 +31,23 @@ enum DictationHotkey {
         controller.onStateChange = { syncCancelShortcut(with: $0) }
     }
 
-    /// Registers `cancelDictation` while a dictation is running and releases it when idle. Also to be called
-    /// after the user records a new cancel shortcut, which registers it system-wide.
+    /// Releases both shortcuts while the user records a new one, so that pressing one does not trigger it, and
+    /// restores them afterwards.
+    @MainActor
+    static func setCapturing(_ capturing: Bool, controllerState: DictationController.State) {
+        isCapturing = capturing
+        if capturing {
+            KeyboardShortcuts.disable(.toggleDictation, .cancelDictation)
+        } else {
+            KeyboardShortcuts.enable(.toggleDictation)
+            syncCancelShortcut(with: controllerState)
+        }
+    }
+
+    /// Registers `cancelDictation` while a dictation is running and releases it when idle.
+    @MainActor
     static func syncCancelShortcut(with state: DictationController.State) {
+        guard !isCapturing else { return }
         if state == .idle {
             KeyboardShortcuts.disable(.cancelDictation)
         } else {

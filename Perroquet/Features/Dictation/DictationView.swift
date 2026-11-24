@@ -22,10 +22,18 @@ struct DictationView: View {
                 }
             }
             Section("Shortcut") {
-                KeyboardShortcuts.Recorder("Dictation shortcut", name: .toggleDictation)
-                KeyboardShortcuts.Recorder("Cancel shortcut", name: .cancelDictation) { _ in
-                    DictationHotkey.syncCancelShortcut(with: controller.state)
-                }
+                ShortcutRecorder(
+                    title: "Dictation shortcut",
+                    name: .toggleDictation,
+                    conflictsWith: .cancelDictation,
+                    allowsBareKeys: false,
+                    onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
+                ShortcutRecorder(
+                    title: "Cancel shortcut",
+                    name: .cancelDictation,
+                    conflictsWith: .toggleDictation,
+                    allowsBareKeys: true,
+                    onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
                 Picker("Mode", selection: $controller.mode) {
                     ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
                 }
