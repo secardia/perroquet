@@ -113,7 +113,7 @@ struct MainWindow: View {
     }
 }
 
-/// Sidebar row: rounded, filled when selected, green icon only on the selected page, count in a gray pill.
+/// Sidebar row: rounded, filled when selected, red-orange icon only on the selected page, count in a gray pill.
 private struct SidebarRow: View {
     let title: LocalizedStringKey
     let icon: String

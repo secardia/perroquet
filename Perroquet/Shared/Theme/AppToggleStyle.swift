@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Switch that is parrot green when on and gray when off.
+/// Switch that is parrot red-orange when on and gray when off.
 struct AppToggleStyle: ToggleStyle {
     @Environment(\.isEnabled) private var isEnabled
 

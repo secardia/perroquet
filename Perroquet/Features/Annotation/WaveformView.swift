@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bars of a waveform with the played part in the accent green; click or drag to seek.
+/// Bars of a waveform with the played part in the accent red-orange; click or drag to seek.
 struct WaveformView: View {
     /// Peaks in 0…1; nil while computing.
     let peaks: [Float]?

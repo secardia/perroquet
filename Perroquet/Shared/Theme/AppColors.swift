@@ -24,12 +24,12 @@ enum AppColors {
     /// Tertiary text and inactive icons.
     static let textTertiary = Color(hex: 0x6E6E6E)
 
-    /// The parrot green, reserved for the selected page icon, active toggles, play and played waveform, primary actions and the ready or listening pill.
-    static let accent = Color(hex: 0x86C25E)
-    /// Dark green fill behind accent content.
-    static let accentMuted = Color(hex: 0x2B3B1F)
-    /// Dark green fill while pressed.
-    static let accentMutedPressed = Color(hex: 0x344926)
+    /// The parrot red-orange, reserved for the selected page icon, active toggles, play and played waveform, primary actions and the ready or listening pill.
+    static let accent = Color(hex: 0xF07548)
+    /// Dark red-orange fill behind accent content.
+    static let accentMuted = Color(hex: 0x3D2219)
+    /// Dark red-orange fill while pressed.
+    static let accentMutedPressed = Color(hex: 0x4A2A1E)
 
     /// Error messages; muted red readable on the background, never used as a fill.
     static let error = Color(hex: 0xE5746E)

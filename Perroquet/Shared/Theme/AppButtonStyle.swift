@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Filled, borderless, rounded button. `neutral` is gray, `primary` is parrot green on dark green.
+/// Filled, borderless, rounded button. `neutral` is gray, `primary` is parrot red-orange on dark red-orange.
 struct AppButtonStyle: ButtonStyle {
     /// Color scheme of the button.
     enum Variant {
         /// Gray fill.
         case neutral
-        /// Parrot green on dark green.
+        /// Parrot red-orange on dark red-orange.
         case primary
     }
 
@@ -47,7 +47,7 @@ struct AppButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == AppButtonStyle {
     /// Gray filled button.
     static var appNeutral: AppButtonStyle { AppButtonStyle(variant: .neutral) }
-    /// Parrot green primary action button.
+    /// Parrot red-orange primary action button.
     static var appPrimary: AppButtonStyle { AppButtonStyle(variant: .primary) }
 }
 

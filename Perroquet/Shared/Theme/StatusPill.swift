@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Small state pill: gray while loading, parrot green when the app is ready or listening.
+/// Small state pill: gray while loading, parrot red-orange when the app is ready or listening.
 struct StatusPill: View {
     /// Color scheme of the pill.
     enum Tone {
         /// Gray: nothing happening or still loading.
         case neutral
-        /// Parrot green: ready or listening.
+        /// Parrot red-orange: ready or listening.
         case active
     }
 
