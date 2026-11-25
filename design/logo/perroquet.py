@@ -6,7 +6,7 @@ with the same settings as Tomate.icon so the apps share one look.
 
 Writes Perroquet/Perroquet.icon (the app icon), the one-colour menu bar template
 (Perroquet/Assets.xcassets/MenuBarIcon.imageset/MenuBarIcon.svg: head, beaks and
-crest merged, the eye punched out, no waves) and Liquid Glass previews in
+crest merged, the eye punched out) and Liquid Glass previews in
 design/logo/preview/.
 
 Usage: python3 -I design/logo/perroquet.py
@@ -37,9 +37,10 @@ ICTOOL = "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Conten
 
 BLUE, GREEN, YELLOW, WHITE = "#2F80ED", "#3DD17A", "#FFC83D", "#FFFFFF"
 
-# The motif is drawn in its own coordinates, then centred and scaled on the 1024 canvas.
-MOTIF_CENTRE = (521, 470)
-MOTIF_SCALE = 1.12
+# The parrot is drawn in its own coordinates, then scaled and centred on the 1024 canvas.
+# MOTIF_CENTRE is the centre of the bounding box of every layer (crest, head, beaks).
+MOTIF_CENTRE = (419, 432)
+MOTIF_SCALE = 1.4
 
 # Crest: one feather repeated three times. The tips sit on one arc (centred on
 # CREST_PIVOT, through the yellow tip), CREST_STEP degrees apart; each feather leans back
@@ -66,12 +67,6 @@ def crest() -> str:
     return "".join(paths)
 
 
-def arc(cx: float, cy: float, r: float, half_angle_deg: float) -> str:
-    a = math.radians(half_angle_deg)
-    x, dy = cx + r * math.cos(a), r * math.sin(a)
-    return f"M{x:.1f} {cy - dy:.1f} A{r} {r} 0 0 1 {x:.1f} {cy + dy:.1f}"
-
-
 def eye() -> str:
     white, pupil = 64, 27
     iris = (white + pupil) / 2 + 3
@@ -85,18 +80,13 @@ def eye() -> str:
 # Layer name -> SVG fragment in motif coordinates.
 LAYERS = {
     "eye": eye(),
-    "head": '<ellipse cx="360" cy="535" rx="215" ry="240" fill="#E83A45"/>',
+    "head": '<circle cx="360" cy="500" r="210" fill="#E83A45"/>',
     "upper-beak": (
         '<path d="M465 375 C630 335, 730 420, 720 545 C716 590, 684 600, 676 565 '
         'C664 515, 630 495, 480 500 Z" fill="#FBC24A"/>'
     ),
     "lower-beak": '<path d="M480 560 C610 560, 660 590, 660 640 C620 672, 560 668, 480 645 Z" fill="#E08A12"/>',
     "crest": crest(),
-    "waves": (
-        '<g fill="none" stroke-width="52" stroke-linecap="round">'
-        f'<path d="{arc(700, 590, 100, 50)}" stroke="{WHITE}"/>'
-        f'<path d="{arc(700, 590, 180, 50)}" stroke="{BLUE}"/></g>'
-    ),
 }
 
 
@@ -128,7 +118,6 @@ LAYER_SPECS: list[dict[str, Any]] = [
     },
     {"id": "lower-beak", "name": "Lower beak"},
     {"id": "crest", "name": "Crest"},
-    {"id": "waves", "name": "Waves", "glass": True},
 ]
 
 
@@ -170,16 +159,22 @@ def build_icon() -> None:
     (ICON / "icon.json").write_text(json.dumps(document, indent=2) + "\n")
 
 
-# Bounding box of head, beaks and crest in motif coordinates: x, y, width, height.
-MENU_BAR_BOX = (117, 154, 604, 510)
-MENU_BAR_HEIGHT_PT = 18
+# Eye hole of the menu bar glyph, smaller than the app icon's eye so it stays light at 17pt.
+MENU_BAR_EYE_RADIUS = 46
+# Bounding box of the head, beaks and crest in motif coordinates: x, y, width, height.
+MENU_BAR_BOX = (117, 150, 604, 560)
+MENU_BAR_HEIGHT_PT = 17
+
+
+def black(fragment: str) -> str:
+    """Return `fragment` with every fill forced to black, for a template image."""
+    return re.sub(r'fill="#[0-9A-Fa-f]{6}"', 'fill="#000"', fragment)
 
 
 def build_menu_bar_icon() -> None:
     """Write the menu bar template: one black silhouette with the eye as a hole, cropped to the motif."""
-    black = lambda fragment: re.sub(r'fill="#[0-9A-Fa-f]{6}"', 'fill="#000"', fragment)
     x, y, w, h = MENU_BAR_BOX
-    eye_hole = '<circle cx="465" cy="448" r="64" fill="#000"/>'
+    eye_hole = f'<circle cx="465" cy="448" r="{MENU_BAR_EYE_RADIUS}" fill="#000"/>'
     shapes = "".join(
         black(LAYERS[name]) for name in ("head", "upper-beak", "lower-beak", "crest")
     )

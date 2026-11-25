@@ -54,11 +54,6 @@
         {
           "image-name": "crest.png",
           "name": "Crest"
-        },
-        {
-          "image-name": "waves.png",
-          "name": "Waves",
-          "glass": true
         }
       ],
       "shadow": {
