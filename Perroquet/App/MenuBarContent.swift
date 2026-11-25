@@ -1,37 +1,42 @@
 import AppKit
 import SwiftUI
 
-/// Panel shown by the menu bar item: last dictation plus the open-window and quit actions.
+/// Menu shown by the menu bar item: state line, copy of the last dictation, settings and quit.
 struct MenuBarContent: View {
     @Environment(DictationController.self) private var controller
+    @Environment(Transcriber.self) private var transcriber
+    @Environment(MainNavigation.self) private var navigation
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismiss) private var dismiss
+
+    /// Longest preview of the last dictation shown under "Copy last dictation".
+    private static let previewLength = 50
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LastDictationCard()
-
-            if let problem = controller.problem {
-                Text(problem)
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+        Text(controller.problem ?? transcriber.state.summary)
+        Divider()
+        if !controller.lastText.isEmpty {
+            Button(action: copyLastText) {
+                Text("Copy last dictation")
+                Text(Self.preview(of: controller.lastText))
             }
-
-            HStack {
-                Button("Open \(Bundle.main.appName)") {
-                    openWindow(id: MainWindow.id)
-                    MainWindowPresenter.bringToFront()
-                    dismiss()
-                }
-                Spacer()
-                Button("Quit") {
-                    NSApp.terminate(nil)
-                }
-                .keyboardShortcut("q")
-            }
+            .keyboardShortcut("c")
+            Divider()
         }
-        .padding(14)
-        .frame(width: 300)
+        Button("Settings…") { openSettings(navigation, openWindow) }
+            .keyboardShortcut(",")
+        Divider()
+        Button("Quit \(Bundle.main.appName)") { NSApp.terminate(nil) }
+            .keyboardShortcut("q")
+    }
+
+    private func copyLastText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(controller.lastText, forType: .string)
+    }
+
+    /// Start of `text` on a single line, cut with an ellipsis.
+    static func preview(of text: String) -> String {
+        let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return line.count > previewLength ? line.prefix(previewLength) + "…" : line
     }
 }

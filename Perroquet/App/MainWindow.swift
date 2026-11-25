@@ -6,7 +6,7 @@ struct MainWindow: View {
     /// Scene identifier used to open the window.
     static let id = "main"
 
-    private enum Page: Hashable {
+    enum Page: Hashable {
         case general
         case shortcuts
         case microphone
@@ -23,11 +23,12 @@ struct MainWindow: View {
     }
 
     @Environment(AnnotationStore.self) private var annotation
-    @State private var selection: Page? = .general
+    @Environment(MainNavigation.self) private var navigation
 
     var body: some View {
+        @Bindable var navigation = navigation
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $navigation.page) {
                 Section("Dictation") {
                     Label("General", systemImage: "gearshape").tag(Page.general)
                     Label("Shortcuts", systemImage: "keyboard").tag(Page.shortcuts)
@@ -42,7 +43,7 @@ struct MainWindow: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
         } detail: {
-            let page = selection ?? .general
+            let page = navigation.page
             Group {
                 switch page {
                 case .general: GeneralSettingsView()
@@ -56,18 +57,18 @@ struct MainWindow: View {
         .frame(minWidth: 640, minHeight: 360)
         .task { await annotation.reload() }
         .onAppear {
-            selection = .general
+            navigation.page = .general
             MainWindowPresenter.showInDock()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
             if MainWindowPresenter.concernsMainWindow(note) {
                 MainWindowPresenter.showInDock()
-                if selection != .review { Task { await annotation.reload() } }
+                if navigation.page != .review { Task { await annotation.reload() } }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
             if MainWindowPresenter.concernsMainWindow(note) {
-                selection = .general
+                navigation.page = .general
                 MainWindowPresenter.hideFromDock()
             }
         }

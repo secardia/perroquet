@@ -111,6 +111,16 @@
         }
       }
     },
+    "Copy last dictation": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier la dernière dictée"
+          }
+        }
+      }
+    },
     "Could not disable launch at login: %@": {
       "localizations": {
         "fr": {
@@ -441,26 +451,6 @@
         }
       }
     },
-    "Nothing yet": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rien pour l’instant"
-          }
-        }
-      }
-    },
-    "Open %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir %@"
-          }
-        }
-      }
-    },
     "Pause": {
       "localizations": {
         "fr": {
@@ -511,12 +501,12 @@
         }
       }
     },
-    "Quit": {
+    "Quit %@": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quitter"
+            "value": "Quitter %@"
           }
         }
       }
@@ -577,6 +567,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enregistrer les dictées"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages…"
           }
         }
       }

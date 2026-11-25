@@ -9,6 +9,7 @@ struct PerroquetApp: App {
     @State private var annotation: AnnotationStore
     @State private var microphone: MicrophoneSelection
     @State private var launchAtLogin: LaunchAtLogin
+    @State private var navigation = MainNavigation()
 
     init() {
         let dataset = DatasetStore()
@@ -45,10 +46,12 @@ struct PerroquetApp: App {
         MenuBarExtra {
             MenuBarContent()
                 .environment(controller)
+                .environment(transcriber)
+                .environment(navigation)
         } label: {
             MenuBarLabel(icon: controller.menuBarIcon)
         }
-        .menuBarExtraStyle(.window)
+        .menuBarExtraStyle(.menu)
 
         Window(Bundle.main.appName, id: MainWindow.id) {
             MainWindow()
@@ -58,7 +61,9 @@ struct PerroquetApp: App {
                 .environment(microphone)
                 .environment(launchAtLogin)
                 .environment(annotation)
+                .environment(navigation)
         }
         .defaultSize(width: 900, height: 600)
+        .commands { SettingsCommand(navigation: navigation) }
     }
 }
