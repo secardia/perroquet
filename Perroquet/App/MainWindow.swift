@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Main window content: one tab per feature.
@@ -22,5 +23,16 @@ struct MainWindow: View {
                 .tag(Tab.annotation)
         }
         .frame(minWidth: 480, minHeight: 320)
+        .onAppear { MainWindowPresenter.showInDock() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+            if let window = note.object as? NSWindow, MainWindowPresenter.isMainWindow(window) {
+                MainWindowPresenter.showInDock()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
+            if let window = note.object as? NSWindow, MainWindowPresenter.isMainWindow(window) {
+                MainWindowPresenter.hideFromDock()
+            }
+        }
     }
 }

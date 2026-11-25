@@ -1,6 +1,6 @@
 import AppKit
 
-/// Brings the main window to the front of an app that has no Dock icon.
+/// Brings the main window to the front and shows the app in the Dock while that window is open.
 enum MainWindowPresenter {
     /// Un-minimizes, orders front and makes key the main window, then activates the app.
     ///
@@ -17,5 +17,25 @@ enum MainWindowPresenter {
             window.orderFrontRegardless()
             NSApp.activate()
         }
+    }
+
+    /// Whether `window` is the main window scene's window.
+    @MainActor
+    static func isMainWindow(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue.hasPrefix(MainWindow.id) == true
+    }
+
+    /// Shows the app in the Dock and Cmd-Tab, then re-activates it so the window stays in front.
+    @MainActor
+    static func showInDock() {
+        guard NSApp.activationPolicy() != .regular else { return }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+    }
+
+    /// Returns the app to a menu-bar-only app with no Dock icon.
+    @MainActor
+    static func hideFromDock() {
+        NSApp.setActivationPolicy(.accessory)
     }
 }
