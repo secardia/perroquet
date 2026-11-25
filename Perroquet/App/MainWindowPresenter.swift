@@ -3,6 +3,9 @@ import AppKit
 /// Brings the main window to the front and shows the app in the Dock while that window is open.
 @MainActor
 enum MainWindowPresenter {
+    /// The pending delayed hide started by `hideFromDock()`, cancelled when the app is shown again.
+    private static var pendingHide: Task<Void, Never>?
+
     /// Un-minimizes, orders front and makes key the main window, then activates the app.
     ///
     /// Call right after `openWindow`, since SwiftUI creates the window asynchronously.
@@ -31,6 +34,7 @@ enum MainWindowPresenter {
 
     /// Shows the app in the Dock and Cmd-Tab, then re-activates it so the window stays in front.
     static func showInDock() {
+        pendingHide?.cancel()
         guard NSApp.activationPolicy() != .regular else { return }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
@@ -41,8 +45,9 @@ enum MainWindowPresenter {
     /// Called from `willClose`: waits for the close to finish, then leaves the Dock only if no main
     /// window is still visible (a close immediately followed by a reopen keeps the Dock icon).
     static func hideFromDock() {
-        Task {
-            try? await Task.sleep(for: .milliseconds(100))
+        pendingHide?.cancel()
+        pendingHide = Task {
+            guard (try? await Task.sleep(for: .milliseconds(100))) != nil else { return }
             guard !NSApp.windows.contains(where: { isMainWindow($0) && $0.isVisible }) else { return }
             NSApp.setActivationPolicy(.accessory)
         }

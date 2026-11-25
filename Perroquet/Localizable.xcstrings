@@ -211,6 +211,16 @@
         }
       }
     },
+    "Dictation cancelled": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictée annulée"
+          }
+        }
+      }
+    },
     "Dictation shortcut": {
       "localizations": {
         "fr": {
@@ -511,6 +521,16 @@
         }
       }
     },
+    "Problem": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Problème"
+          }
+        }
+      }
+    },
     "Quit %@": {
       "localizations": {
         "fr": {
@@ -677,6 +697,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "À relire"
+          }
+        }
+      }
+    },
+    "Transcribing": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription en cours"
           }
         }
       }

@@ -11,7 +11,18 @@ struct MenuBarLabel: View {
 
     var body: some View {
         Image(nsImage: Self.image(for: icon))
-            .accessibilityLabel(Bundle.main.appName)
+            .accessibilityLabel(Self.accessibilityLabel(for: icon))
+    }
+
+    private static func accessibilityLabel(for icon: MenuBarIcon) -> Text {
+        switch icon {
+        case .parrot: Text(verbatim: Bundle.main.appName)
+        case .symbol("ellipsis"): Text("Transcribing")
+        case .symbol("xmark"): Text("Dictation cancelled")
+        case .symbol("exclamationmark.triangle"): Text("Problem")
+        case .symbol(let name):
+            fallbackLabel(for: name)
+        }
     }
 
     private static let parrot: NSImage = {
@@ -19,6 +30,11 @@ struct MenuBarLabel: View {
         image.isTemplate = true
         return image
     }()
+
+    private static func fallbackLabel(for name: String) -> Text {
+        assertionFailure("No accessibility label for \(name)")
+        return Text(verbatim: Bundle.main.appName)
+    }
 
     private static func image(for icon: MenuBarIcon) -> NSImage {
         switch icon {
@@ -33,7 +49,10 @@ struct MenuBarLabel: View {
         guard
             let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
                 .withSymbolConfiguration(configuration)
-        else { return parrot }
+        else {
+            assertionFailure("Unknown SF Symbol \(name)")
+            return parrot
+        }
         let canvas = parrot.size
         let image = NSImage(size: canvas, flipped: false) { _ in
             let origin = NSPoint(x: (canvas.width - symbol.size.width) / 2, y: (canvas.height - symbol.size.height) / 2)

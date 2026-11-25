@@ -314,6 +314,7 @@ final class DictationControllerTests: XCTestCase {
         controller.hotkeyDown()
         controller.hotkeyDown()
         await waitForTranscriptionGate(fakes)
+        XCTAssertEqual(controller.menuBarIcon, .symbol("ellipsis"))
         controller.cancel()
         XCTAssertEqual(controller.state, .idle)
         fakes.transcriptionGate?.resume()

@@ -14,14 +14,16 @@ Needs resvg, and Xcode's ictool for the previews (run outside the sandbox:
 ictool needs the GPU).
 """
 
+from __future__ import annotations
+
 import json
 import math
 import re
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ICON = HERE.parent.parent / "Perroquet" / "Perroquet.icon"
@@ -41,6 +43,7 @@ BLUE, GREEN, YELLOW, WHITE = "#2F80ED", "#3DD17A", "#FFC83D", "#FFFFFF"
 # MOTIF_CENTRE is the centre of the bounding box of every layer (crest, head, beaks).
 MOTIF_CENTRE = (419, 432)
 MOTIF_SCALE = 1.4
+EYE_CENTRE = (465, 448)
 
 # Crest: one feather repeated three times. The tips sit on one arc (centred on
 # CREST_PIVOT, through the yellow tip), CREST_STEP degrees apart; each feather leans back
@@ -53,6 +56,7 @@ CREST_LEAN = 0.55
 
 
 def crest() -> str:
+    """Return the three overlapping crest feathers, back to front."""
     px, py = CREST_PIVOT
     tx, ty = FEATHER_TIP
     radius = math.dist(CREST_PIVOT, FEATHER_TIP)
@@ -68,12 +72,14 @@ def crest() -> str:
 
 
 def eye() -> str:
+    """Return the eye: white, yellow iris and an off-centre pupil."""
+    cx, cy = EYE_CENTRE
     white, pupil = 64, 27
     iris = (white + pupil) / 2 + 3
     return (
-        f'<circle cx="465" cy="448" r="{white}" fill="{WHITE}"/>'
-        f'<circle cx="465" cy="448" r="{iris}" fill="{YELLOW}"/>'
-        f'<circle cx="{465 + iris - pupil - 6}" cy="448" r="{pupil}" fill="#0d1218"/>'
+        f'<circle cx="{cx}" cy="{cy}" r="{white}" fill="{WHITE}"/>'
+        f'<circle cx="{cx}" cy="{cy}" r="{iris}" fill="{YELLOW}"/>'
+        f'<circle cx="{cx + iris - pupil - 6}" cy="{cy}" r="{pupil}" fill="#0d1218"/>'
     )
 
 
@@ -90,38 +96,49 @@ LAYERS = {
 }
 
 
-def gradient(top: str, bottom: str) -> dict:
+def gradient(top: str, bottom: str) -> dict[str, object]:
+    """Return a top-to-bottom linear gradient fill for icon.json."""
     return {
         "linear-gradient": [top, bottom],
         "orientation": {"start": {"x": 0.5, "y": 0}, "stop": {"x": 0.5, "y": 1}},
     }
 
 
-# Front to back, as in Tomate.icon. Layers without "fill" keep their PNG colours.
-LAYER_SPECS: list[dict[str, Any]] = [
-    {"id": "eye", "name": "Eye"},
-    {
-        "id": "head",
-        "name": "Head",
-        "fill": gradient(
+@dataclass(frozen=True)
+class LayerSpec:
+    """One layer of the icon: its id, display name and optional gradient fill."""
+
+    id: str
+    name: str
+    fill: dict[str, object] | None = None
+
+
+# Front to back, as in Tomate.icon. Layers without a fill keep their PNG colours.
+LAYER_SPECS = [
+    LayerSpec("eye", "Eye"),
+    LayerSpec(
+        "head",
+        "Head",
+        gradient(
             "srgb:1.00000,0.26000,0.24000,1.00000",
             "srgb:0.88000,0.04000,0.16000,1.00000",
         ),
-    },
-    {
-        "id": "upper-beak",
-        "name": "Upper beak",
-        "fill": gradient(
+    ),
+    LayerSpec(
+        "upper-beak",
+        "Upper beak",
+        gradient(
             "srgb:1.00000,0.87843,0.47843,1.00000",
             "srgb:0.96078,0.65098,0.13725,1.00000",
         ),
-    },
-    {"id": "lower-beak", "name": "Lower beak"},
-    {"id": "crest", "name": "Crest"},
+    ),
+    LayerSpec("lower-beak", "Lower beak"),
+    LayerSpec("crest", "Crest"),
 ]
 
 
 def build_icon() -> None:
+    """Write the layer PNGs and icon.json of the .icon bundle."""
     shutil.rmtree(ICON, ignore_errors=True)
     (ICON / "Assets").mkdir(parents=True)
     cx, cy = MOTIF_CENTRE
@@ -129,21 +146,19 @@ def build_icon() -> None:
     entries = []
     with tempfile.TemporaryDirectory() as tmp:
         for spec in LAYER_SPECS:
-            src = Path(tmp) / f"{spec['id']}.svg"
+            src = Path(tmp) / f"{spec.id}.svg"
             src.write_text(
                 f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">'
-                f'<g transform="{transform}">{LAYERS[spec["id"]]}</g></svg>'
+                f'<g transform="{transform}">{LAYERS[spec.id]}</g></svg>'
             )
-            png = f"{spec['id']}.png"
+            png = f"{spec.id}.png"
             subprocess.run(
                 ["resvg", "-w", "1024", str(src), str(ICON / "Assets" / png)],
                 check=True,
             )
-            entry = {"image-name": png, "name": spec["name"]}
-            if "fill" in spec:
-                entry["fill"] = spec["fill"]
-            if spec.get("glass"):
-                entry["glass"] = True
+            entry: dict[str, object] = {"image-name": png, "name": spec.name}
+            if spec.fill is not None:
+                entry["fill"] = spec.fill
             entries.append(entry)
     document = {
         "fill": "system-dark",
@@ -174,7 +189,10 @@ def black(fragment: str) -> str:
 def build_menu_bar_icon() -> None:
     """Write the menu bar template: one black silhouette with the eye as a hole, cropped to the motif."""
     x, y, w, h = MENU_BAR_BOX
-    eye_hole = f'<circle cx="465" cy="448" r="{MENU_BAR_EYE_RADIUS}" fill="#000"/>'
+    eye_x, eye_y = EYE_CENTRE
+    eye_hole = (
+        f'<circle cx="{eye_x}" cy="{eye_y}" r="{MENU_BAR_EYE_RADIUS}" fill="#000"/>'
+    )
     shapes = "".join(
         black(LAYERS[name]) for name in ("head", "upper-beak", "lower-beak", "crest")
     )
@@ -190,6 +208,7 @@ def build_menu_bar_icon() -> None:
 
 
 def build_previews() -> None:
+    """Render Liquid Glass previews of the icon with ictool."""
     PREVIEWS.mkdir(exist_ok=True)
     for size in (512, 128, 64, 32):
         subprocess.run(
