@@ -14,11 +14,10 @@ final class DictationController {
         /// Transcribing and pasting the last recording.
         case transcribing
 
-        /// Icon shown in the menu bar.
+        /// Icon shown in the menu bar; recording keeps the parrot, since macOS already shows its own microphone indicator.
         var menuBarIcon: MenuBarIcon {
             switch self {
-            case .idle: .parrot
-            case .recording: .symbol("mic.fill")
+            case .idle, .recording: .parrot
             case .transcribing: .symbol("ellipsis")
             }
         }

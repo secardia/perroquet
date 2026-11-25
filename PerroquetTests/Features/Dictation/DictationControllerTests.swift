@@ -293,15 +293,17 @@ final class DictationControllerTests: XCTestCase {
         XCTAssertEqual(controller.menuBarIcon, .parrot)
     }
 
-    func testNewDictationDuringCrossShowsRecordingAndTimerDoesNotClobber() async {
+    func testNewDictationDuringCrossShowsParrotAndTimerDoesNotClobber() async {
         let (controller, _) = make(mode: .tap, cancelledDuration: .milliseconds(20))
         controller.hotkeyDown()
         controller.cancel()
         let mark = controller.cancelledMark
         controller.hotkeyDown()
-        XCTAssertEqual(controller.menuBarIcon, .symbol("mic.fill"))
+        XCTAssertEqual(controller.menuBarIcon, .parrot)
         await mark?.value
-        XCTAssertEqual(controller.menuBarIcon, .symbol("mic.fill"))
+        XCTAssertEqual(controller.state, .recording)
+        XCTAssertFalse(controller.showsCancelled)
+        XCTAssertEqual(controller.menuBarIcon, .parrot)
         controller.hotkeyDown()
         await settle(controller)
         XCTAssertEqual(controller.menuBarIcon, .parrot)

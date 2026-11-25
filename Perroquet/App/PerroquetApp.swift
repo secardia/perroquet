@@ -39,10 +39,7 @@ struct PerroquetApp: App {
             MenuBarContent()
                 .environment(controller)
         } label: {
-            switch controller.menuBarIcon {
-            case .parrot: Image(.menuBarIcon)
-            case .symbol(let name): Image(systemName: name)
-            }
+            MenuBarLabel(icon: controller.menuBarIcon)
         }
         .menuBarExtraStyle(.window)
 
