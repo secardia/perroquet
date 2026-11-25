@@ -50,7 +50,7 @@ struct DictationView: View {
             Section("Status") {
                 LabeledContent("Model", value: Transcriber.modelDisplayName)
                 LabeledContent("Model state", value: transcriber.state.summary)
-                LabeledContent("Microphone") {
+                LabeledContent {
                     permissionRow(granted: permissions.microphone == .authorized) {
                         permissions.beginGrant()
                         if permissions.microphone == .notDetermined {
@@ -59,13 +59,18 @@ struct DictationView: View {
                             permissions.openMicrophoneSettings()
                         }
                     }
+                } label: {
+                    Text("Microphone")
+                    Text("Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.")
                 }
-                LabeledContent("Accessibility") {
+                LabeledContent {
                     permissionRow(granted: permissions.accessibilityTrusted) {
                         permissions.beginGrant()
-                        permissions.requestAccessibilityAndRefresh()
-                        permissions.openAccessibilitySettings()
+                        permissions.grantAccessibility()
                     }
+                } label: {
+                    Text("Accessibility")
+                    Text("Lets \(Bundle.main.appName) paste the transcribed text into the app you are typing in.")
                 }
                 if let message = controller.message {
                     Text(message).foregroundStyle(.red)

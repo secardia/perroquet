@@ -17,6 +17,7 @@ final class Permissions {
     @ObservationIgnored private let readMicrophone: () -> AVAuthorizationStatus
     @ObservationIgnored private let readAccessibility: () -> Bool
     @ObservationIgnored private var grantRequestedAt: Date?
+    @ObservationIgnored private var accessibilityPrompted = false
     @ObservationIgnored private let now: () -> Date
 
     /// Creates the state from the system; the readers can be replaced in tests.
@@ -63,9 +64,20 @@ final class Permissions {
     }
 
     /// Asks for Accessibility trust (system prompt), then refreshes.
-    func requestAccessibilityAndRefresh() {
+    private func requestAccessibilityAndRefresh() {
         _ = Self.requestAccessibility()
         refresh()
+    }
+
+    /// Opens one window per Grant click: the system prompt the first time, which adds the app to the
+    /// Accessibility list and offers to open System Settings, then the settings pane on later clicks.
+    func grantAccessibility() {
+        if accessibilityPrompted {
+            openAccessibilitySettings()
+        } else {
+            accessibilityPrompted = true
+            requestAccessibilityAndRefresh()
+        }
     }
 
     /// Returns whether Accessibility is trusted, showing the system prompt when it is not.
@@ -80,7 +92,7 @@ final class Permissions {
     }
 
     /// Opens the Accessibility pane of System Settings.
-    func openAccessibilitySettings() {
+    private func openAccessibilitySettings() {
         open("Privacy_Accessibility")
     }
 
