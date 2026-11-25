@@ -15,6 +15,7 @@ struct PerroquetApp: App {
         let transcriber = Transcriber()
         let microphone = MicrophoneSelection()
         let recorder = AudioRecorder(selectedUID: { microphone.selectedUID })
+        microphone.onSelect = { Task { recorder.prepare() } }
         let controller = DictationController(
             recorder: recorder,
             transcriber: transcriber,

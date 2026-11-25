@@ -23,6 +23,9 @@ final class MicrophoneSelection {
     /// UID of the chosen device, nil for the system default.
     private(set) var selectedUID: String?
 
+    /// Called after the choice changes.
+    @ObservationIgnored var onSelect: (() -> Void)?
+
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let listDevices: () -> [InputDevice]
 
@@ -45,6 +48,11 @@ final class MicrophoneSelection {
         return result
     }
 
+    /// Whether the chosen device is a connected Bluetooth headset.
+    var selectedIsBluetooth: Bool {
+        devices.first { $0.uid == selectedUID }?.isBluetooth ?? false
+    }
+
     /// Re-reads the connected devices.
     func refresh() {
         let current = listDevices()
@@ -61,5 +69,6 @@ final class MicrophoneSelection {
             defaults.removeObject(forKey: Self.uidKey)
             defaults.removeObject(forKey: Self.nameKey)
         }
+        onSelect?()
     }
 }

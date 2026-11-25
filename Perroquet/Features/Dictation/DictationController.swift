@@ -39,8 +39,10 @@ final class DictationController {
     private(set) var lastText = ""
     /// Whether a cancelled dictation is still being acknowledged in the menu bar.
     private(set) var showsCancelled = false
-    /// Last problem or reason a shortcut press was ignored.
+    /// Last problem or reason a shortcut press was ignored, other than a recording failure.
     private(set) var message: String?
+    /// Why the microphone could not record during the last dictation.
+    private(set) var recordingError: String?
 
     /// How the shortcut drives recording; persisted on change.
     var mode: RecordingMode {
@@ -110,6 +112,7 @@ final class DictationController {
             return
         }
         message = nil
+        recordingError = nil
         cancelledMark?.cancel()
         showsCancelled = false
         generation += 1
@@ -154,7 +157,7 @@ final class DictationController {
 
     private func recordingFailed(_ error: Error, generation id: Int) {
         guard state == .recording, id == generation else { return }
-        message = "Could not start recording: \(error.localizedDescription)"
+        recordingError = "Could not start recording: \(error.localizedDescription)"
         state = .idle
     }
 
@@ -166,7 +169,7 @@ final class DictationController {
             do {
                 try await start?.value
             } catch {
-                if id == generation { message = "Could not start recording: \(error.localizedDescription)" }
+                if id == generation { recordingError = "Could not start recording: \(error.localizedDescription)" }
                 return nil
             }
             return recorder.stop()

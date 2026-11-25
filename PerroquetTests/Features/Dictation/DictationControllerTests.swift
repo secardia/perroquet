@@ -172,7 +172,8 @@ final class DictationControllerTests: XCTestCase {
         controller.hotkeyDown()
         _ = try? await controller.recordingStart?.value
         XCTAssertEqual(controller.state, .idle)
-        XCTAssertNotNil(controller.message)
+        XCTAssertNotNil(controller.recordingError)
+        XCTAssertNil(controller.message)
         XCTAssertTrue(fakes.pasted.isEmpty)
     }
 

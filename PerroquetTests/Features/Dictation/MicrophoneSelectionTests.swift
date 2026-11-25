@@ -45,4 +45,23 @@ final class MicrophoneSelectionTests: XCTestCase {
         selection.select(nil)
         XCTAssertNil(MicrophoneSelection(defaults: defaults, listDevices: { [] }).selectedUID)
     }
+
+    func testSelectingNotifiesTheChange() {
+        let selection = MicrophoneSelection(defaults: makeDefaults(), listDevices: { [self] in [usb] })
+        var notified = 0
+        selection.onSelect = { notified += 1 }
+        selection.select("usb-1")
+        selection.select(nil)
+        XCTAssertEqual(notified, 2)
+    }
+
+    func testFlagsBluetoothChoice() {
+        let airPods = InputDevice(uid: "airpods", name: "AirPods", isBluetooth: true)
+        let selection = MicrophoneSelection(defaults: makeDefaults(), listDevices: { [self] in [builtIn, airPods] })
+        XCTAssertFalse(selection.selectedIsBluetooth)
+        selection.select("airpods")
+        XCTAssertTrue(selection.selectedIsBluetooth)
+        selection.select("builtin")
+        XCTAssertFalse(selection.selectedIsBluetooth)
+    }
 }

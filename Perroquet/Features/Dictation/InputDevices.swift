@@ -6,6 +6,8 @@ struct InputDevice: Identifiable, Equatable, Sendable {
     let uid: String
     /// Name shown to the user.
     let name: String
+    /// Whether it is a Bluetooth headset, which switches to its call profile while recording.
+    var isBluetooth = false
 
     var id: String { uid }
 }
@@ -16,7 +18,7 @@ enum InputDevices {
     static func available() -> [InputDevice] {
         allDeviceIDs().compactMap { id in
             guard hasInput(id), let uid = string(id, kAudioDevicePropertyDeviceUID) else { return nil }
-            return InputDevice(uid: uid, name: string(id, kAudioObjectPropertyName) ?? uid)
+            return InputDevice(uid: uid, name: string(id, kAudioObjectPropertyName) ?? uid, isBluetooth: isBluetooth(id))
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -28,6 +30,13 @@ enum InputDevices {
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &device)
         return status == noErr && device != kAudioObjectUnknown ? device : nil
+    }
+
+    /// The system default input, or the Mac's built-in microphone when the default is a Bluetooth headset: recording
+    /// switches a headset to its call profile, which lowers its sound quality and interrupts what it plays.
+    static func preferredDefaultInputID() -> AudioDeviceID? {
+        guard let device = defaultInputID(), isBluetooth(device) else { return defaultInputID() }
+        return allDeviceIDs().first { hasInput($0) && transportType($0) == kAudioDeviceTransportTypeBuiltIn } ?? device
     }
 
     /// The device with `uid`, or nil when it is not connected.
@@ -43,6 +52,20 @@ enum InputDevices {
         }
         guard status == noErr, device != kAudioObjectUnknown, hasInput(device) else { return nil }
         return device
+    }
+
+    /// Whether the device is connected over Bluetooth (classic or LE).
+    static func isBluetooth(_ id: AudioDeviceID) -> Bool {
+        let transport = transportType(id)
+        return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+    }
+
+    private static func transportType(_ id: AudioDeviceID) -> UInt32? {
+        var addr = address(kAudioDevicePropertyTransportType)
+        var transport: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &transport) == noErr else { return nil }
+        return transport
     }
 
     private static func address(
