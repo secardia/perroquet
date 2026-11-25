@@ -14,14 +14,18 @@ struct PerroquetApp: App {
         let dataset = DatasetStore()
         let transcriber = Transcriber()
         let microphone = MicrophoneSelection()
+        let recorder = AudioRecorder(selectedUID: { microphone.selectedUID })
         let controller = DictationController(
-            recorder: AudioRecorder(selectedUID: { microphone.selectedUID }),
+            recorder: recorder,
             transcriber: transcriber,
             paster: Paster.system(),
             store: dataset)
         _transcriber = State(initialValue: transcriber)
         let permissions = Permissions()
-        permissions.onGranted = { MainWindowPresenter.bringToFront() }
+        permissions.onGranted = {
+            recorder.prepare()
+            MainWindowPresenter.bringToFront()
+        }
         _permissions = State(initialValue: permissions)
         _controller = State(initialValue: controller)
         _microphone = State(initialValue: microphone)
@@ -30,6 +34,8 @@ struct PerroquetApp: App {
 
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             DictationHotkey.install(for: controller)
+            // Deferred: a cold audio stack can take over a second, which must not hold up the launch.
+            Task { recorder.prepare() }
             Task { await transcriber.load() }
         }
     }

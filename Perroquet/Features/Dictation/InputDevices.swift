@@ -21,6 +21,15 @@ enum InputDevices {
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    /// The system default input device, or nil when there is none.
+    static func defaultInputID() -> AudioDeviceID? {
+        var addr = address(kAudioHardwarePropertyDefaultInputDevice)
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &device)
+        return status == noErr && device != kAudioObjectUnknown ? device : nil
+    }
+
     /// The device with `uid`, or nil when it is not connected.
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         var addr = address(kAudioHardwarePropertyTranslateUIDToDevice)
