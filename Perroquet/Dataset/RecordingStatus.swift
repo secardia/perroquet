@@ -4,14 +4,12 @@ import Foundation
 enum RecordingStatus: CaseIterable, Sendable {
     case pending
     case validated
-    case rejected
 
     /// Name of the dataset subfolder holding recordings in this state.
     var folderName: String {
         switch self {
         case .pending: "Pending_Recordings"
         case .validated: "Validated_Recordings"
-        case .rejected: "Rejected_Recordings"
         }
     }
 }

@@ -119,21 +119,25 @@ final class DatasetStoreTests: XCTestCase {
         XCTAssertEqual(store.list().map(\.status), [.validated])
     }
 
-    func testRejectMovesWithoutTouchingTexts() throws {
+    func testDeleteRemovesTheRecordingFolder() throws {
         let recording = try store.addPending(samples: [0], transcription: record())
-        let rejected = try store.reject(id: recording.id)
-        XCTAssertEqual(rejected.status, .rejected)
-        XCTAssertEqual(try text(rejected.folder.appending(path: "transcription.txt")), "hello world")
-        XCTAssertEqual(try text(rejected.folder.appending(path: "transcription_raw.txt")), "hello world")
+        try store.delete(id: recording.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.folder.path))
+        XCTAssertTrue(store.list().isEmpty)
     }
 
-    func testRevalidateRejected() throws {
+    func testDeleteValidatedRecording() throws {
         let recording = try store.addPending(samples: [0], transcription: record())
-        try store.reject(id: recording.id)
-        let validated = try store.validate(id: recording.id, text: "again")
-        XCTAssertEqual(validated.status, .validated)
-        XCTAssertEqual(store.list().count, 1)
-        XCTAssertEqual(store.list().first?.readTranscription(), "again")
+        let validated = try store.validate(id: recording.id, text: "fixed")
+        try store.delete(id: recording.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: validated.folder.path))
+        XCTAssertTrue(store.list().isEmpty)
+    }
+
+    func testDeleteUnknownIDThrows() {
+        XCTAssertThrowsError(try store.delete(id: "nope")) {
+            XCTAssertEqual($0 as? DatasetStore.StoreError, .recordingNotFound("nope"))
+        }
     }
 
     func testValidateUnknownIDThrows() {
@@ -144,9 +148,9 @@ final class DatasetStoreTests: XCTestCase {
 
     func testMoveOntoExistingDestinationFails() throws {
         let recording = try store.addPending(samples: [0], transcription: record())
-        let clash = root.appending(path: "Rejected_Recordings/\(recording.id)", directoryHint: .isDirectory)
+        let clash = root.appending(path: "Validated_Recordings/\(recording.id)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: clash, withIntermediateDirectories: true)
-        XCTAssertThrowsError(try store.reject(id: recording.id))
+        XCTAssertThrowsError(try store.validate(id: recording.id, text: "x"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: recording.folder.path))
     }
 
@@ -180,7 +184,7 @@ final class DatasetStoreTests: XCTestCase {
     func testListSortedByIDAcrossFolders() throws {
         let a = try store.addPending(samples: [0], transcription: record(), id: "20260101-000001-A")
         let b = try store.addPending(samples: [0], transcription: record(), id: "20260101-000002-B")
-        try store.reject(id: a.id)
+        try store.validate(id: a.id, text: "x")
         XCTAssertEqual(store.list().map(\.id), [a.id, b.id])
     }
 }

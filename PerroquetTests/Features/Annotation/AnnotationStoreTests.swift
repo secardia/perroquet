@@ -44,7 +44,7 @@ final class AnnotationStoreTests: XCTestCase {
         try add("c")
         let session = store()
         XCTAssertEqual(session.current?.id, "c")
-        try session.reject()
+        try session.save("C")
         XCTAssertEqual(session.current?.id, "b")
         session.previous()
         XCTAssertEqual(session.current?.id, "c")
@@ -82,7 +82,7 @@ final class AnnotationStoreTests: XCTestCase {
         let session = store()
         XCTAssertEqual(session.current?.id, "b")
         XCTAssertEqual(session.currentText, "hello\n")
-        XCTAssertEqual(session.processedCount, 1)
+        XCTAssertEqual(session.validatedCount, 1)
         XCTAssertEqual(session.recordings.count, 2)
     }
 
@@ -92,21 +92,21 @@ final class AnnotationStoreTests: XCTestCase {
         let session = store()
         try session.save("fixed a")
         XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(session.processedCount, 1)
+        XCTAssertEqual(session.validatedCount, 1)
         let first = try XCTUnwrap(dataset.list().first { $0.id == "b" })
         XCTAssertEqual(first.status, .validated)
         XCTAssertEqual(first.readTranscription(), "fixed a")
     }
 
-    func testRejectMovesToRejectedAndAdvances() throws {
-        try add("b")
+    func testDeleteRemovesFromDiskAndAdvances() throws {
+        let first = try add("b")
         try add("a")
         let session = store()
-        try session.reject()
+        try session.delete()
         XCTAssertEqual(session.current?.id, "a")
-        let first = try XCTUnwrap(dataset.list().first { $0.id == "b" })
-        XCTAssertEqual(first.status, .rejected)
-        XCTAssertEqual(first.readTranscription(), "raw b")
+        XCTAssertEqual(session.recordings.map(\.id), ["a"])
+        XCTAssertEqual(dataset.list().map(\.id), ["a"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first.folder.path))
     }
 
     func testAllDoneThenPreviousGoesToLast() throws {
@@ -114,25 +114,23 @@ final class AnnotationStoreTests: XCTestCase {
         try add("a")
         let session = store()
         try session.save("x")
-        try session.reject()
+        try session.delete()
         XCTAssertNil(session.current)
-        XCTAssertEqual(session.processedCount, 2)
+        XCTAssertEqual(session.validatedCount, 1)
+        XCTAssertEqual(session.recordings.count, 1)
         session.previous()
-        XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(session.current?.status, .rejected)
+        XCTAssertEqual(session.current?.id, "b")
+        XCTAssertEqual(session.current?.status, .validated)
     }
 
-    func testPreviousCrossesStatusesAndResaveRejectedValidates() async throws {
+    func testPreviousSkipsDeletedAndResaveValidated() async throws {
         try add("c")
         try add("b")
         try add("a")
         let session = store()
         try session.save("A")
-        try session.reject()
+        try session.delete()
         XCTAssertEqual(session.current?.id, "a")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "b")
-        XCTAssertEqual(session.currentText, "raw b")
         session.previous()
         XCTAssertEqual(session.current?.id, "c")
         XCTAssertEqual(session.currentText, "A")
@@ -143,11 +141,19 @@ final class AnnotationStoreTests: XCTestCase {
         try session.save("A2")
         XCTAssertEqual(session.current?.id, "a")
         XCTAssertEqual(dataset.list().first { $0.id == "c" }?.readTranscription(), "A2")
+        XCTAssertNil(dataset.list().first { $0.id == "b" })
+    }
 
+    func testDeleteValidatedReachedByPrevious() throws {
+        try add("b")
+        try add("a")
+        let session = store()
+        try session.save("B")
         session.previous()
-        try session.save("B2")
-        XCTAssertEqual(dataset.list().first { $0.id == "b" }?.status, .validated)
+        XCTAssertEqual(session.current?.id, "b")
+        try session.delete()
         XCTAssertEqual(session.current?.id, "a")
+        XCTAssertEqual(dataset.list().map(\.id), ["a"])
     }
 
     func testResaveBackInTheMiddleReturnsToPending() throws {
@@ -207,7 +213,7 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertTrue(session.takeAutoplayRequest())
         XCTAssertFalse(session.takeAutoplayRequest())
 
-        try session.reject()
+        try session.delete()
         XCTAssertTrue(session.takeAutoplayRequest())
 
         session.previous()
@@ -235,17 +241,15 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertFalse(session.takeAutoplayRequest())
     }
 
-    func testTextStaysCorrectAfterSaveRejectPrevious() throws {
+    func testTextStaysCorrectAfterSaveDeletePrevious() throws {
         try add("c", text: "tc")
         try add("b", text: "tb")
         try add("a", text: "ta")
         let session = store()
         try session.save("A fixed")
         XCTAssertEqual(session.currentText, "tb")
-        try session.reject()
+        try session.delete()
         XCTAssertEqual(session.currentText, "ta")
-        session.previous()
-        XCTAssertEqual(session.currentText, "tb")
         session.previous()
         XCTAssertEqual(session.currentText, "A fixed")
         XCTAssertEqual(session.recordings.first?.readTranscription(), "A fixed")
@@ -277,6 +281,6 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertNil(session.current)
         session.previous()
         XCTAssertNil(session.current)
-        XCTAssertEqual(session.processedCount, 0)
+        XCTAssertEqual(session.validatedCount, 0)
     }
 }

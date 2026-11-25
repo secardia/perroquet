@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Annotation tab: review pending dictations and validate or reject them.
+/// Annotation tab: review pending dictations and validate or delete them.
 struct AnnotationView: View {
     @Environment(AnnotationStore.self) private var store
     /// Whether this tab is the visible one; shortcuts and playback only act then.
@@ -55,14 +55,14 @@ struct AnnotationView: View {
     private var header: some View {
         HStack {
             Text(title).font(.headline).textSelection(.enabled)
-            if store.isProcessed, let status = store.current?.status {
-                Text(status == .validated ? "validated" : "rejected")
+            if store.isValidated {
+                Text("validated")
                     .font(.caption)
                     .padding(.horizontal, 6)
-                    .background((status == .validated ? Color.green : Color.orange).opacity(0.25), in: Capsule())
+                    .background(Color.green.opacity(0.25), in: Capsule())
             }
             Spacer()
-            Text("\(store.processedCount) / \(store.recordings.count) processed")
+            Text("\(store.validatedCount) / \(store.recordings.count) validated")
                 .foregroundStyle(.secondary)
         }
     }
@@ -118,7 +118,7 @@ struct AnnotationView: View {
             shortcutButton("Previous", .leftArrow, .command, glyph: "←") { navigate { store.previous() } }
             Spacer()
             if store.current != nil {
-                shortcutButton("Reject", .delete, .command, glyph: "⌫") { navigate { try store.reject() } }
+                shortcutButton("Delete", .delete, .command, glyph: "⌫") { navigate { try store.delete() } }
                 shortcutButton("Save & Next", .return, .command, glyph: "↩") { navigate { try store.save(draft) } }
             }
         }

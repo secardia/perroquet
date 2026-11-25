@@ -4,8 +4,8 @@ import Observation
 /// Annotation session over the Perroquet dataset.
 ///
 /// Walks recordings newest first: "next" means the next older pending one, "previous" steps back to
-/// the next newer recording regardless of status. Saving validates a recording, rejecting moves it
-/// to Rejected.
+/// the next newer recording regardless of status. Saving validates a recording, deleting removes it
+/// from the dataset.
 @MainActor
 @Observable
 final class AnnotationStore {
@@ -22,10 +22,10 @@ final class AnnotationStore {
     @ObservationIgnored private var autoplayRequested = false
     @ObservationIgnored private var generation = 0
 
-    /// Validated plus rejected recordings.
-    var processedCount: Int { recordings.filter { $0.status != .pending }.count }
-    /// Whether the current recording was already validated or rejected.
-    var isProcessed: Bool { current.map { $0.status != .pending } ?? false }
+    /// Number of validated recordings.
+    var validatedCount: Int { recordings.filter { $0.status == .validated }.count }
+    /// Whether the current recording was already validated.
+    var isValidated: Bool { current?.status == .validated }
 
     /// Opens a session on `dataset`, positioned on the first pending recording.
     ///
@@ -46,7 +46,7 @@ final class AnnotationStore {
         await Task.detached { Array(dataset.list().reversed()) }.value
     }
 
-    /// Returns whether the current recording was reached by an explicit action (save, reject,
+    /// Returns whether the current recording was reached by an explicit action (save, delete,
     /// previous) and should autoplay, then clears the request.
     func takeAutoplayRequest() -> Bool {
         defer { autoplayRequested = false }
@@ -54,7 +54,7 @@ final class AnnotationStore {
     }
 
     /// Re-reads the dataset off the main actor so new dictations show up; does nothing when the dataset
-    /// folders did not change or when a save or reject happened during the scan. Keeps the current
+    /// folders did not change or when a save or delete happened during the scan. Keeps the current
     /// recording; when none is current (all done), opens the first pending one if any.
     func reload() async {
         let signature = dataset.signature()
@@ -80,10 +80,12 @@ final class AnnotationStore {
         advance(after: current.id)
     }
 
-    /// Moves the current recording to Rejected and advances.
-    func reject() throws {
+    /// Deletes the current recording from disk and advances to the next pending one. Throws on
+    /// failure, leaving the position unchanged.
+    func delete() throws {
         guard let current else { return }
-        replace(try dataset.reject(id: current.id))
+        try dataset.delete(id: current.id)
+        recordings.removeAll { $0.id == current.id }
         generation += 1
         advance(after: current.id)
     }

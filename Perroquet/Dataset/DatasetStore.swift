@@ -3,7 +3,7 @@ import Foundation
 
 /// Reads and writes the on-disk fine-tuning dataset.
 ///
-/// Layout: `<root>/{Pending,Validated,Rejected}_Recordings/<id>/` holding
+/// Layout: `<root>/{Pending,Validated}_Recordings/<id>/` holding
 /// `audio.wav`, `transcription_raw.txt`, `transcription.txt`, `infos.json`, `metadata.json`.
 struct DatasetStore: Sendable {
     /// Errors raised by dataset operations.
@@ -73,7 +73,7 @@ struct DatasetStore: Sendable {
             id: id, status: .pending, folder: folder, audio: folder.appending(path: "audio.wav"))
     }
 
-    /// Lists recordings of all three folders, sorted by id.
+    /// Lists recordings of every status folder, sorted by id.
     func list() -> [DatasetRecording] {
         RecordingStatus.allCases
             .flatMap { recordings(in: $0) }
@@ -90,7 +90,7 @@ struct DatasetStore: Sendable {
             .first
     }
 
-    /// Modification dates of the three status folders; changes whenever a recording is added, moved or removed.
+    /// Modification dates of the status folders; changes whenever a recording is added, moved or removed.
     func signature() -> [Date?] {
         RecordingStatus.allCases.map {
             let url = root.appending(path: $0.folderName, directoryHint: .isDirectory)
@@ -106,10 +106,9 @@ struct DatasetStore: Sendable {
         return moved
     }
 
-    /// Moves the recording to Rejected, leaving its texts untouched.
-    @discardableResult
-    func reject(id: String) throws -> DatasetRecording {
-        try move(try locate(id: id), to: .rejected)
+    /// Deletes the recording folder (audio, texts, metadata) for good.
+    func delete(id: String) throws {
+        try fileManager.removeItem(at: try locate(id: id).folder)
     }
 
     private func folderURL(id: String, status: RecordingStatus) -> URL {
