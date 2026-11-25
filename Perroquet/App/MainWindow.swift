@@ -11,6 +11,7 @@ struct MainWindow: View {
         case shortcuts
         case microphone
         case review
+        case validated
 
         var title: LocalizedStringKey {
             switch self {
@@ -18,11 +19,13 @@ struct MainWindow: View {
             case .shortcuts: "Shortcuts"
             case .microphone: "Microphone"
             case .review: "To review"
+            case .validated: "Validated"
             }
         }
     }
 
     @Environment(AnnotationStore.self) private var annotation
+    @Environment(ValidatedStore.self) private var validated
     @Environment(MainNavigation.self) private var navigation
 
     var body: some View {
@@ -38,6 +41,9 @@ struct MainWindow: View {
                     Label("To review", systemImage: "text.badge.checkmark")
                         .badge(annotation.pendingCount)
                         .tag(Page.review)
+                    Label("Validated", systemImage: "checkmark.circle")
+                        .badge(validated.validatedCount)
+                        .tag(Page.validated)
                 }
             }
             .listStyle(.sidebar)
@@ -50,12 +56,17 @@ struct MainWindow: View {
                 case .shortcuts: ShortcutSettingsView()
                 case .microphone: MicrophoneSettingsView()
                 case .review: AnnotationView()
+                case .validated: ValidatedListView()
                 }
             }
             .navigationTitle(page.title)
         }
         .frame(minWidth: 640, minHeight: 360)
-        .task { await annotation.reload() }
+        .task {
+            await annotation.reload()
+            await validated.reload()
+        }
+        .onChange(of: navigation.page) { Task { await validated.reload() } }
         .onAppear {
             navigation.page = .general
             MainWindowPresenter.showInDock()
@@ -63,7 +74,10 @@ struct MainWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
             if MainWindowPresenter.concernsMainWindow(note) {
                 MainWindowPresenter.showInDock()
-                if navigation.page != .review { Task { await annotation.reload() } }
+                Task {
+                    if navigation.page != .review { await annotation.reload() }
+                    if navigation.page != .validated { await validated.reload() }
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in

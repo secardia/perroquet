@@ -80,6 +80,11 @@ struct DatasetStore: Sendable {
             .sorted { $0.id < $1.id }
     }
 
+    /// Lists the recordings of one status folder, sorted by id.
+    func list(in status: RecordingStatus) -> [DatasetRecording] {
+        recordings(in: status).sorted { $0.id < $1.id }
+    }
+
     /// The recording with the greatest id, found from the folder listings without reading any recording.
     func latest() -> DatasetRecording? {
         RecordingStatus.allCases
@@ -104,6 +109,11 @@ struct DatasetStore: Sendable {
         let moved = try move(try locate(id: id), to: .validated)
         try write(text, to: moved.folder.appending(path: "transcription.txt"))
         return moved
+    }
+
+    /// Rewrites the transcription of a recording without changing its status.
+    func saveText(id: String, text: String) throws {
+        try write(text, to: try locate(id: id).folder.appending(path: "transcription.txt"))
     }
 
     /// Deletes the recording folder (audio, texts, metadata) for good.

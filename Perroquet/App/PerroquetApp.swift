@@ -7,6 +7,7 @@ struct PerroquetApp: App {
     @State private var permissions: Permissions
     @State private var controller: DictationController
     @State private var annotation: AnnotationStore
+    @State private var validated: ValidatedStore
     @State private var microphone: MicrophoneSelection
     @State private var launchAtLogin: LaunchAtLogin
     @State private var navigation = MainNavigation()
@@ -33,6 +34,7 @@ struct PerroquetApp: App {
         _microphone = State(initialValue: microphone)
         _launchAtLogin = State(initialValue: LaunchAtLogin())
         _annotation = State(initialValue: AnnotationStore(dataset: dataset))
+        _validated = State(initialValue: ValidatedStore(dataset: dataset))
 
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             DictationHotkey.install(for: controller)
@@ -61,6 +63,7 @@ struct PerroquetApp: App {
                 .environment(microphone)
                 .environment(launchAtLogin)
                 .environment(annotation)
+                .environment(validated)
                 .environment(navigation)
         }
         .defaultSize(width: 900, height: 600)

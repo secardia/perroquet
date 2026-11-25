@@ -411,6 +411,16 @@
         }
       }
     },
+    "No validated dictations": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune dictée validée"
+          }
+        }
+      }
+    },
     "None": {
       "localizations": {
         "fr": {
@@ -727,6 +737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Valider (⌘↩)"
+          }
+        }
+      }
+    },
+    "Validated": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validés"
           }
         }
       }
