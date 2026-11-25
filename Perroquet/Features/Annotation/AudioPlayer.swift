@@ -49,7 +49,7 @@ final class AudioPlayer {
                 duration = length.seconds
             } catch {
                 guard player === next else { return }
-                errorMessage = "Cannot open \(url.lastPathComponent): \(error.localizedDescription)"
+                errorMessage = String(localized: "Cannot open \(url.lastPathComponent): \(error.localizedDescription)")
                 stop(keepingError: true)
             }
         }

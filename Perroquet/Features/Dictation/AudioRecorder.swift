@@ -21,8 +21,8 @@ final class AudioRecorder: AudioRecording {
         /// Message shown to the user.
         var errorDescription: String? {
             switch self {
-            case .microphoneDenied: "Microphone access is denied."
-            case .unsupportedFormat: "The microphone format is not supported."
+            case .microphoneDenied: String(localized: "Microphone access is denied.")
+            case .unsupportedFormat: String(localized: "The microphone format is not supported.")
             }
         }
     }

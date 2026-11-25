@@ -23,11 +23,11 @@ final class Transcriber: SpeechTranscribing {
         /// Short label for status displays.
         var summary: String {
             switch self {
-            case .idle: "Waiting"
-            case .downloading(let fraction): "Downloading… \(Int(fraction * 100))%"
-            case .loading: "Loading…"
-            case .ready: "Ready"
-            case .failed(let message): "Failed: \(message)"
+            case .idle: String(localized: "Waiting")
+            case .downloading(let fraction): String(localized: "Downloading… \(Int(fraction * 100))%")
+            case .loading: String(localized: "Loading…")
+            case .ready: String(localized: "Ready")
+            case .failed(let message): String(localized: "Failed: \(message)")
             }
         }
     }

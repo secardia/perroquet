@@ -32,11 +32,13 @@ final class LaunchAtLogin {
             }
             errorMessage = nil
             if enabled, SMAppService.mainApp.status == .requiresApproval {
-                errorMessage = "Approve \(Bundle.main.appName) in System Settings → General → Login Items to launch it at login."
+                errorMessage = String(localized: "Approve \(Bundle.main.appName) in System Settings → General → Login Items to launch it at login.")
                 SMAppService.openSystemSettingsLoginItems()
             }
         } catch {
-            errorMessage = "Could not \(enabled ? "enable" : "disable") launch at login: \(error.localizedDescription)"
+            errorMessage = enabled
+                ? String(localized: "Could not enable launch at login: \(error.localizedDescription)")
+                : String(localized: "Could not disable launch at login: \(error.localizedDescription)")
         }
         refresh()
     }

@@ -35,7 +35,7 @@ struct LastDictationCard: View {
     }
 
     private var row: some View {
-        Text(controller.lastText.isEmpty ? "Nothing yet" : controller.lastText)
+        Text(controller.lastText.isEmpty ? LocalizedStringKey("Nothing yet") : LocalizedStringKey(controller.lastText))
             .foregroundStyle(controller.lastText.isEmpty ? .secondary : .primary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 10)

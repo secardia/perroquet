@@ -13,8 +13,8 @@ enum RecordingMode: String, CaseIterable, Identifiable {
     /// Label shown in the mode picker.
     var title: String {
         switch self {
-        case .tap: "Tap"
-        case .hold: "Hold"
+        case .tap: String(localized: "Tap")
+        case .hold: String(localized: "Hold")
         }
     }
 }

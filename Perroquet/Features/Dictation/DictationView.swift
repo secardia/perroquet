@@ -9,11 +9,25 @@ struct DictationView: View {
     @Environment(Permissions.self) private var permissions
     @Environment(MicrophoneSelection.self) private var microphone
     @Environment(LaunchAtLogin.self) private var launchAtLogin
+    @State private var language = AppLanguage.atLaunch
 
     var body: some View {
         @Bindable var controller = controller
         Form {
             Section("General") {
+                Picker("Language", selection: $language) {
+                    ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                }
+                .onChange(of: language) { language.store() }
+                if language != AppLanguage.atLaunch {
+                    LabeledContent {
+                        Button("Relaunch", action: AppLanguage.relaunch)
+                    } label: {
+                        Text("Takes effect the next time \(Bundle.main.appName) opens")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Toggle(
                     "Launch at login",
                     isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) }))
@@ -109,7 +123,7 @@ struct DictationView: View {
     /// A permission row styled like a two-line `LabeledContent`, but with the status centered on both lines
     /// (`LabeledContent` aligns its value with the title only).
     private func permissionRow(
-        _ title: String, detail: String, granted: Bool, action: @escaping () -> Void
+        _ title: LocalizedStringKey, detail: LocalizedStringKey, granted: Bool, action: @escaping () -> Void
     ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {

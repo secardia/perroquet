@@ -45,7 +45,7 @@ final class DictationController {
     var problem: String? {
         if let recordingError { return recordingError }
         guard isRetryingModel, !transcriber.isReady else { return message }
-        return transcriber.failureReason.map { "Could not load the model: \($0)" } ?? "Loading the model…"
+        return transcriber.failureReason.map { String(localized: "Could not load the model: \($0)") } ?? String(localized: "Loading the model…")
     }
 
     /// Current phase of the pipeline.
@@ -135,7 +135,7 @@ final class DictationController {
     private func beginRecording() {
         guard transcriber.isReady else {
             isRetryingModel = transcriber.retryIfFailed()
-            message = isRetryingModel ? nil : "The model is not ready yet."
+            message = isRetryingModel ? nil : String(localized: "The model is not ready yet.")
             return
         }
         isRetryingModel = false
@@ -185,7 +185,7 @@ final class DictationController {
 
     private func recordingFailed(_ error: Error, generation id: Int) {
         guard state == .recording, id == generation else { return }
-        recordingError = "Could not start recording: \(error.localizedDescription)"
+        recordingError = String(localized: "Could not start recording: \(error.localizedDescription)")
         state = .idle
     }
 
@@ -197,7 +197,7 @@ final class DictationController {
             do {
                 try await start?.value
             } catch {
-                if id == generation { recordingError = "Could not start recording: \(error.localizedDescription)" }
+                if id == generation { recordingError = String(localized: "Could not start recording: \(error.localizedDescription)") }
                 return nil
             }
             return recorder.stop()
@@ -219,7 +219,7 @@ final class DictationController {
         do {
             record = try await transcriber.transcribe(samples)
         } catch {
-            if id == generation { message = "Transcription failed: \(error.localizedDescription)" }
+            if id == generation { message = String(localized: "Transcription failed: \(error.localizedDescription)") }
             return nil
         }
         guard id == generation else { return nil }
@@ -232,7 +232,7 @@ final class DictationController {
         do {
             try await paster.paste(text)
         } catch {
-            message = "Could not paste: \(error.localizedDescription)"
+            message = String(localized: "Could not paste: \(error.localizedDescription)")
         }
         return (samples, record)
     }
@@ -242,7 +242,7 @@ final class DictationController {
         do {
             try await Task.detached { try store.save(samples: samples, transcription: record) }.value
         } catch {
-            message = "Could not save the recording: \(error.localizedDescription)"
+            message = String(localized: "Could not save the recording: \(error.localizedDescription)")
         }
     }
 }

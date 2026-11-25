@@ -39,11 +39,11 @@ final class MicrophoneSelection {
 
     /// "System default", then the connected devices, plus the chosen device flagged as disconnected when absent.
     var options: [Option] {
-        var result = [Option(uid: nil, title: "System default")]
+        var result = [Option(uid: nil, title: String(localized: "System default"))]
         result += devices.map { Option(uid: $0.uid, title: $0.name) }
         if let uid = selectedUID, !devices.contains(where: { $0.uid == uid }) {
             let name = defaults.string(forKey: Self.nameKey) ?? uid
-            result.append(Option(uid: uid, title: "\(name) (disconnected)"))
+            result.append(Option(uid: uid, title: String(localized: "\(name) (disconnected)")))
         }
         return result
     }

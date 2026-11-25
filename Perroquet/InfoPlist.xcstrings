@@ -1,0 +1,13 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Perroquet records your voice to transcribe it locally." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Perroquet enregistre votre voix pour la transcrire localement." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

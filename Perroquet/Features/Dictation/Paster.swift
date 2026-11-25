@@ -72,7 +72,7 @@ struct Paster: TextPasting {
 
         /// Message shown to the user.
         var errorDescription: String? {
-            "Accessibility access is required to paste. Enable \(Bundle.main.appName) in System Settings."
+            String(localized: "Accessibility access is required to paste. Enable \(Bundle.main.appName) in System Settings.")
         }
     }
 

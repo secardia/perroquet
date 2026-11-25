@@ -48,7 +48,7 @@ struct AnnotationView: View {
     }
 
     private var title: String {
-        guard let id = store.current?.id else { return "Done" }
+        guard let id = store.current?.id else { return String(localized: "Done") }
         return RecordingID.date(from: id)?.formatted(date: .abbreviated, time: .standard) ?? id
     }
 
@@ -125,12 +125,12 @@ struct AnnotationView: View {
     }
 
     private func shortcutButton(
-        _ title: String, _ key: KeyEquivalent, _ modifiers: EventModifiers, glyph: String,
+        _ title: LocalizedStringResource, _ key: KeyEquivalent, _ modifiers: EventModifiers, glyph: String,
         action: @escaping () -> Void
     ) -> some View {
         let symbol = (modifiers.contains(.control) ? "⌃" : "") + (modifiers.contains(.command) ? "⌘" : "")
         return Button(action: action) {
-            Text("\(title)  \(Text("\(symbol)\(glyph)").foregroundStyle(.secondary))")
+            Text("\(Text(title))  \(Text(verbatim: "\(symbol)\(glyph)").foregroundStyle(.secondary))")
         }
         .keyboardShortcut(isActive ? KeyboardShortcut(key, modifiers: modifiers) : nil)
     }

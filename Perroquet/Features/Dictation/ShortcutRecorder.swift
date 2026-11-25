@@ -47,7 +47,7 @@ struct ShortcutRecorder: View {
     var body: some View {
         LabeledContent(title) {
             Button(action: toggle) {
-                Text(isCapturing ? "Press keys…" : shortcut?.description ?? "None")
+                Text(isCapturing ? LocalizedStringKey("Press keys…") : shortcut.map { LocalizedStringKey($0.description) } ?? LocalizedStringKey("None"))
                     .frame(minWidth: 110)
             }
             .buttonStyle(.bordered)
