@@ -49,28 +49,28 @@ struct DictationView: View {
             }
             Section("Status") {
                 LabeledContent("Model", value: Transcriber.modelDisplayName)
-                LabeledContent("Model state", value: transcriber.state.summary)
-                LabeledContent {
-                    permissionRow(granted: permissions.microphone == .authorized) {
-                        permissions.beginGrant()
-                        if permissions.microphone == .notDetermined {
-                            Task { await permissions.requestMicrophone() }
-                        } else {
-                            permissions.openMicrophoneSettings()
-                        }
+                // Plain Text: with the selectable text of `LabeledContent(_:value:)`, "Ready" ended up left of the
+                // right edge, apparently keeping the width of an earlier, longer state ("Loading…").
+                LabeledContent("Model state") { Text(transcriber.state.summary) }
+                permissionRow(
+                    "Microphone",
+                    detail: "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.",
+                    granted: permissions.microphone == .authorized
+                ) {
+                    permissions.beginGrant()
+                    if permissions.microphone == .notDetermined {
+                        Task { await permissions.requestMicrophone() }
+                    } else {
+                        permissions.openMicrophoneSettings()
                     }
-                } label: {
-                    Text("Microphone")
-                    Text("Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.")
                 }
-                LabeledContent {
-                    permissionRow(granted: permissions.accessibilityTrusted) {
-                        permissions.beginGrant()
-                        permissions.grantAccessibility()
-                    }
-                } label: {
-                    Text("Accessibility")
-                    Text("Lets \(Bundle.main.appName) paste the transcribed text into the app you are typing in.")
+                permissionRow(
+                    "Accessibility",
+                    detail: "Lets \(Bundle.main.appName) paste the transcribed text into the app you are typing in.",
+                    granted: permissions.accessibilityTrusted
+                ) {
+                    permissions.beginGrant()
+                    permissions.grantAccessibility()
                 }
                 if let message = controller.message {
                     Text(message).foregroundStyle(.red)
@@ -95,13 +95,21 @@ struct DictationView: View {
         microphone.refresh()
     }
 
-    @ViewBuilder
-    private func permissionRow(granted: Bool, action: @escaping () -> Void) -> some View {
-        if granted {
-            Text("Granted")
-        } else {
-            HStack {
-                Text("Not granted")
+    /// A permission row styled like a two-line `LabeledContent`, but with the status centered on both lines
+    /// (`LabeledContent` aligns its value with the title only).
+    private func permissionRow(
+        _ title: String, detail: String, granted: Bool, action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if granted {
+                Text("Granted").foregroundStyle(.secondary)
+            } else {
+                Text("Not granted").foregroundStyle(.secondary)
                 Button("Grant…", action: action)
             }
         }
