@@ -54,8 +54,9 @@ final class AnnotationStore {
     }
 
     /// Re-reads the dataset off the main actor so new dictations show up; does nothing when the dataset
-    /// folders did not change or when a save or delete happened during the scan. Keeps the current
-    /// recording; when none is current (all done), opens the first pending one if any.
+    /// folders did not change or when a save or delete happened during the scan. When a pending recording
+    /// appeared, jumps to the newest pending one; otherwise keeps the current recording, or, when none is
+    /// current (all done), opens the first pending one if any.
     func reload() async {
         let signature = dataset.signature()
         guard signature != lastSignature else { return }
@@ -63,11 +64,16 @@ final class AnnotationStore {
         let listed = await scan(dataset)
         guard generation == startedAt else { return }
         lastSignature = signature
+        let known = Set(recordings.map(\.id))
         recordings = listed
-        if let id = current?.id, let refreshed = listed.first(where: { $0.id == id }) {
+        let newest = listed.first { $0.status == .pending }
+        let hasNewPending = listed.contains { $0.status == .pending && !known.contains($0.id) }
+        if hasNewPending, let newest {
+            moveTo(newest, explicit: false)
+        } else if let id = current?.id, let refreshed = listed.first(where: { $0.id == id }) {
             current = refreshed
         } else {
-            moveTo(listed.first { $0.status == .pending }, explicit: false)
+            moveTo(newest, explicit: false)
         }
     }
 

@@ -5,6 +5,10 @@ import Foundation
 protocol SpeechTranscribing {
     /// Whether the model is loaded and able to transcribe.
     var isReady: Bool { get }
+    /// Why the last model load failed; nil unless it failed.
+    var failureReason: String? { get }
+    /// Relaunches model loading when the previous attempt failed; returns whether it did.
+    func retryIfFailed() -> Bool
     /// Transcribes 16 kHz mono samples.
     func transcribe(_ samples: [Float]) async throws -> TranscriptionRecord
 }

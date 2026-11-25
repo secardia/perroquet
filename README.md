@@ -9,6 +9,7 @@ Native voice dictation for macOS. Press a shortcut, speak, and your words are ty
 - **Dictate anywhere:** global keyboard shortcut to start and stop recording, from any app.
 - **Paste at cursor:** the transcribed text is inserted directly into the active text field.
 - **Local transcription:** speech-to-text runs on your Mac with Parakeet ([FluidAudio](https://github.com/FluidInference/FluidAudio), on the Neural Engine). Audio never leaves the machine.
+- **Keep or discard:** dictations are saved on your Mac for review in the Annotation tab; turn off "Save recordings" to keep nothing.
 - **Menu bar app:** stays out of the way; shows when it is listening.
 - **Language:** 🇬🇧 English / 🇫🇷 Français.
 

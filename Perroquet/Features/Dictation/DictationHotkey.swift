@@ -1,9 +1,9 @@
 import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
-    /// Global shortcut toggling dictation. Default is ⌘$: on a French AZERTY layout `$`
+    /// Global shortcut toggling dictation. Default is ⌘⇧$: on a French AZERTY layout `$`
     /// sits on the ANSI right-bracket key.
-    static let toggleDictation = Self("toggleDictation", default: .init(.rightBracket, modifiers: .command))
+    static let toggleDictation = Self("toggleDictation", default: .init(.rightBracket, modifiers: [.command, .shift]))
 
     /// Global shortcut cancelling the dictation in progress. Default is Escape; it is only registered
     /// while a dictation is running, so other apps keep receiving it.

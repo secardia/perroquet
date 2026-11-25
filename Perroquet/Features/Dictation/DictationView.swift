@@ -20,6 +20,7 @@ struct DictationView: View {
                 if let message = launchAtLogin.errorMessage {
                     Text(message).foregroundStyle(.red)
                 }
+                Toggle("Save recordings", isOn: $controller.saveRecordings)
             }
             Section("Shortcut") {
                 ShortcutRecorder(
@@ -64,7 +65,7 @@ struct DictationView: View {
                 LabeledContent("Model state") { Text(transcriber.state.summary) }
                 permissionRow(
                     "Microphone",
-                    detail: "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.",
+                    detail: "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere. Dictations are kept on this Mac for the Annotation tab unless \"Save recordings\" is off.",
                     granted: permissions.microphone == .authorized
                 ) {
                     permissions.beginGrant()
@@ -82,7 +83,7 @@ struct DictationView: View {
                     permissions.beginGrant()
                     permissions.grantAccessibility()
                 }
-                if let message = controller.message {
+                if controller.recordingError == nil, let message = controller.problem {
                     Text(message).foregroundStyle(.red)
                 }
             }

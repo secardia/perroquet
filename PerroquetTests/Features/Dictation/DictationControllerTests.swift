@@ -5,7 +5,10 @@ import XCTest
 final class DictationControllerTests: XCTestCase {
     private final class Fakes {
         var ready = true
-        var samples: [Float] = [0.1, 0.2]
+        var samples: [Float] = [Float](repeating: 0.1, count: DatasetStore.sampleRate)
+        var failed = false
+        var retries = 0
+        var failureReason: String?
         var text = " hello "
         var events: [String] = []
         var pasted: [String] = []
@@ -31,6 +34,11 @@ final class DictationControllerTests: XCTestCase {
     private struct Transcribe: SpeechTranscribing {
         let fakes: Fakes
         var isReady: Bool { fakes.ready }
+        var failureReason: String? { fakes.failureReason }
+        func retryIfFailed() -> Bool {
+            if fakes.failed { fakes.retries += 1 }
+            return fakes.failed
+        }
         func transcribe(_ samples: [Float]) async throws -> TranscriptionRecord {
             if fakes.holdTranscription {
                 await withCheckedContinuation { fakes.transcriptionGate = $0 }
@@ -103,7 +111,6 @@ final class DictationControllerTests: XCTestCase {
     func testHoldStartsOnDownStopsOnUp() async {
         let (controller, fakes) = make(mode: .hold)
         controller.hotkeyDown()
-        controller.hotkeyDown()
         XCTAssertEqual(controller.state, .recording)
         controller.hotkeyUp()
         XCTAssertEqual(controller.state, .transcribing)
@@ -111,6 +118,96 @@ final class DictationControllerTests: XCTestCase {
         XCTAssertEqual(controller.state, .idle)
         XCTAssertEqual(fakes.events, ["start", "stop"])
         XCTAssertEqual(fakes.pasted, ["hello"])
+    }
+
+    func testHoldSecondPressStopsRecording() async {
+        let (controller, fakes) = make(mode: .hold)
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        XCTAssertEqual(controller.state, .transcribing)
+        await settle(controller)
+        XCTAssertEqual(fakes.pasted, ["hello"])
+    }
+
+    func testFailedModelRetriesInsteadOfRecording() {
+        let (controller, fakes) = make()
+        fakes.ready = false
+        fakes.failed = true
+        controller.hotkeyDown()
+        XCTAssertEqual(fakes.retries, 1)
+        XCTAssertEqual(controller.state, .idle)
+        XCTAssertEqual(controller.problem, "Loading the model…")
+        XCTAssertTrue(fakes.events.isEmpty)
+    }
+
+    func testRetryProblemFollowsTranscriberState() {
+        let (controller, fakes) = make()
+        fakes.ready = false
+        fakes.failed = true
+        controller.hotkeyDown()
+        XCTAssertEqual(controller.problem, "Loading the model…")
+        fakes.failed = false
+        fakes.failureReason = "offline"
+        XCTAssertEqual(controller.problem, "Could not load the model: offline")
+        fakes.failureReason = nil
+        fakes.ready = true
+        XCTAssertNil(controller.problem)
+        XCTAssertEqual(controller.menuBarIcon, .parrot)
+    }
+
+    func testShortRecordingIsDroppedSilently() async {
+        let (controller, fakes) = make(mode: .tap)
+        fakes.samples = [Float](repeating: 0.1, count: DatasetStore.sampleRate * 3 / 10 - 1)
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(controller.state, .idle)
+        XCTAssertTrue(fakes.pasted.isEmpty)
+        XCTAssertTrue(fakes.saved.isEmpty)
+        XCTAssertNil(controller.message)
+    }
+
+    func testMenuBarShowsAlertWhenIdleWithProblemAndParrotOnceRecording() {
+        let (controller, fakes) = make(mode: .tap)
+        XCTAssertEqual(controller.menuBarIcon, .parrot)
+        fakes.ready = false
+        controller.hotkeyDown()
+        XCTAssertEqual(controller.menuBarIcon, .symbol("exclamationmark.triangle"))
+        fakes.ready = true
+        controller.hotkeyDown()
+        XCTAssertEqual(controller.state, .recording)
+        XCTAssertEqual(controller.menuBarIcon, .parrot)
+        XCTAssertNil(controller.problem)
+    }
+
+    func testCrossWinsOverAlertDuringCancelAcknowledgement() {
+        let (controller, fakes) = make(mode: .tap)
+        fakes.ready = false
+        controller.hotkeyDown()
+        fakes.ready = true
+        controller.hotkeyDown()
+        controller.cancel()
+        XCTAssertEqual(controller.menuBarIcon, .symbol("xmark"))
+    }
+
+    func testSaveSkippedWhenSettingIsOff() async {
+        let (controller, fakes) = make(mode: .tap)
+        controller.saveRecordings = false
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(fakes.pasted, ["hello"])
+        XCTAssertEqual(controller.lastText, "hello")
+        XCTAssertTrue(fakes.saved.isEmpty)
+    }
+
+    func testSaveRecordingsDefaultsToTrueAndPersists() {
+        let defaults = makeDefaults()
+        let (first, _) = make(defaults: defaults)
+        XCTAssertTrue(first.saveRecordings)
+        first.saveRecordings = false
+        let (second, _) = make(defaults: defaults)
+        XCTAssertFalse(second.saveRecordings)
     }
 
     func testIgnoredWhileTranscribing() async {

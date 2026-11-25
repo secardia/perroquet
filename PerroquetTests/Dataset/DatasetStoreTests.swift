@@ -52,9 +52,14 @@ final class DatasetStoreTests: XCTestCase {
     func testDateParsedFromID() throws {
         let date = try XCTUnwrap(RecordingID.date(from: "20261124-180208-BC386AE4-F45A-4B93-BA08-11805B6D1F3E"))
         let parts = Calendar(identifier: .gregorian).dateComponents(
-            in: .current, from: date)
+            in: .gmt, from: date)
         XCTAssertEqual([parts.year, parts.month, parts.day], [2026, 11, 24])
         XCTAssertEqual([parts.hour, parts.minute, parts.second], [18, 2, 8])
+    }
+
+    func testMakeUsesUTCPrefix() {
+        let id = RecordingID.make(date: Date(timeIntervalSince1970: 1_800_000_000), uuid: UUID())
+        XCTAssertTrue(id.hasPrefix("20270115-080000-"), id)
     }
 
     func testDateRoundTripsThroughMake() throws {

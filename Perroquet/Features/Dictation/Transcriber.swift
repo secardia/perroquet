@@ -40,6 +40,8 @@ final class Transcriber: SpeechTranscribing {
     // `.int8` selects FluidAudio's default encoder, the 6-bit palettized one.
     private static let encoderPrecision = ParakeetEncoderPrecision.int8
     private static let encoderComputeUnits = MLComputeUnits.cpuAndNeuralEngine
+    /// Share of FluidAudio's overall progress taken by the download phase; dividing by it shows the download as 0–100 %.
+    private static let downloadPhaseWeight = 0.5
 
     /// Model loading progress.
     private(set) var state: State = .idle
@@ -47,6 +49,18 @@ final class Transcriber: SpeechTranscribing {
 
     /// Whether the model is loaded and warmed up.
     var isReady: Bool { state == .ready }
+
+    /// Why the last load failed; nil unless it did.
+    var failureReason: String? {
+        if case .failed(let reason) = state { reason } else { nil }
+    }
+
+    /// Relaunches `load()` when the last attempt failed; returns whether it did.
+    func retryIfFailed() -> Bool {
+        guard case .failed = state else { return false }
+        Task { await load() }
+        return true
+    }
 
     /// Downloads (first run), loads and warms up the model.
     func load() async {
@@ -88,7 +102,7 @@ final class Transcriber: SpeechTranscribing {
         guard case .downloading = state else { return }
         switch progress.phase {
         case .compiling: state = .loading
-        default: state = .downloading(progress.fractionCompleted)
+        default: state = .downloading(min(progress.fractionCompleted / Self.downloadPhaseWeight, 1))
         }
     }
 }

@@ -115,10 +115,10 @@ struct AnnotationView: View {
 
     private var buttons: some View {
         HStack {
-            shortcutButton("Previous", .leftArrow, .command, glyph: "←") { navigate { store.previous() } }
+            Button("Previous") { navigate { store.previous() } }
             Spacer()
             if store.current != nil {
-                shortcutButton("Delete", .delete, .command, glyph: "⌫") { navigate { try store.delete() } }
+                Button("Delete") { navigate { try store.delete() } }
                 shortcutButton("Save & Next", .return, .command, glyph: "↩") { navigate { try store.save(draft) } }
             }
         }

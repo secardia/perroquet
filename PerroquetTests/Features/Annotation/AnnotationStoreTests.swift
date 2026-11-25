@@ -64,15 +64,15 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.current?.id, "a")
     }
 
-    func testSavingWithNoOlderPendingWrapsToNewestPending() async throws {
+    func testSavingAfterReloadJumpContinuesToOlderPending() async throws {
         try add("a")
         let session = store()
         try add("b")
         try add("c")
         await session.reload()
-        XCTAssertEqual(session.current?.id, "a")
-        try session.save("A")
         XCTAssertEqual(session.current?.id, "c")
+        try session.save("C")
+        XCTAssertEqual(session.current?.id, "b")
     }
 
     func testOpensOnFirstPendingWithVerbatimText() throws {
@@ -179,13 +179,36 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.recordings.count, 2)
     }
 
-    func testReloadKeepsCurrentWhenNewDictationArrives() async throws {
+    func testReloadJumpsToNewestWhenNewDictationArrives() async throws {
         try add("a")
         let session = store()
         try add("b")
+        try add("c")
         await session.reload()
-        XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(session.recordings.count, 2)
+        XCTAssertEqual(session.current?.id, "c")
+        XCTAssertEqual(session.recordings.count, 3)
+    }
+
+    func testReloadWithoutNewRecordingKeepsCurrent() async throws {
+        try add("a")
+        try add("b")
+        let session = store()
+        XCTAssertEqual(session.current?.id, "b")
+        try dataset.validate(id: "a", text: "done")
+        await session.reload()
+        XCTAssertEqual(session.current?.id, "b")
+    }
+
+    func testReloadAfterSaveDoesNotJumpBackToNewest() async throws {
+        try add("a")
+        try add("b")
+        try add("c")
+        let session = store()
+        try session.save("C")
+        XCTAssertEqual(session.current?.id, "b")
+        try dataset.validate(id: "a", text: "done")
+        await session.reload()
+        XCTAssertEqual(session.current?.id, "b")
     }
 
     func testStoreErrorLeavesPositionUnchanged() throws {

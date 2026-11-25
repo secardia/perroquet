@@ -23,12 +23,29 @@ final class DictationController {
         }
     }
 
+    /// Recordings shorter than 0.3 s are accidental presses and are dropped.
+    private static let minimumSamples = DatasetStore.sampleRate * 3 / 10
+
     /// UserDefaults key under which the recording mode is stored.
     private static let modeDefaultsKey = "recordingMode"
 
-    /// Icon shown in the menu bar: the cross right after a cancel, otherwise the one of `state`.
+    /// UserDefaults key under which the "Save recordings" setting is stored.
+    private static let saveRecordingsDefaultsKey = "saveRecordings"
+
+    /// Icon shown in the menu bar: the one of `state` while busy; when idle, the cross right after a cancel,
+    /// then a warning while there is a problem to show, otherwise the parrot.
     var menuBarIcon: MenuBarIcon {
-        state == .idle && showsCancelled ? .symbol("xmark") : state.menuBarIcon
+        guard state == .idle else { return state.menuBarIcon }
+        if showsCancelled { return .symbol("xmark") }
+        return problem == nil ? .parrot : .symbol("exclamationmark.triangle")
+    }
+
+    /// Problem to show outside the main window: a recording failure, else the model loading status or load failure
+    /// while a retry is in progress, else the last ignored-press reason or error.
+    var problem: String? {
+        if let recordingError { return recordingError }
+        guard isRetryingModel, !transcriber.isReady else { return message }
+        return transcriber.failureReason.map { "Could not load the model: \($0)" } ?? "Loading the model…"
     }
 
     /// Current phase of the pipeline.
@@ -48,6 +65,14 @@ final class DictationController {
     var mode: RecordingMode {
         didSet { defaults.set(mode.rawValue, forKey: Self.modeDefaultsKey) }
     }
+
+    /// Whether finished dictations are written to the dataset; persisted on change.
+    var saveRecordings: Bool {
+        didSet { defaults.set(saveRecordings, forKey: Self.saveRecordingsDefaultsKey) }
+    }
+
+    /// Whether the last shortcut press relaunched model loading; `problem` then follows the transcriber's state.
+    private var isRetryingModel = false
 
     private let recorder: AudioRecording
     private let transcriber: SpeechTranscribing
@@ -85,6 +110,7 @@ final class DictationController {
         self.cancelledDuration = cancelledDuration
         lastText = store.latestText() ?? ""
         mode = defaults.string(forKey: Self.modeDefaultsKey).flatMap(RecordingMode.init) ?? .tap
+        saveRecordings = defaults.object(forKey: Self.saveRecordingsDefaultsKey) as? Bool ?? true
     }
 
     /// Shortcut pressed.
@@ -92,9 +118,9 @@ final class DictationController {
         switch state {
         case .idle:
             beginRecording()
-        case .recording where mode == .tap:
+        case .recording:
             endRecording()
-        case .recording, .transcribing:
+        case .transcribing:
             break
         }
     }
@@ -108,9 +134,11 @@ final class DictationController {
 
     private func beginRecording() {
         guard transcriber.isReady else {
-            message = "The model is not ready yet."
+            isRetryingModel = transcriber.retryIfFailed()
+            message = isRetryingModel ? nil : "The model is not ready yet."
             return
         }
+        isRetryingModel = false
         message = nil
         recordingError = nil
         cancelledMark?.cancel()
@@ -178,14 +206,14 @@ final class DictationController {
         pipeline = Task {
             let finished = await process(await stopped.value, generation: id)
             if id == generation { state = .idle }
-            if let finished { await save(finished.samples, finished.record) }
+            if let finished, saveRecordings { await save(finished.samples, finished.record) }
         }
     }
 
     private func process(
         _ samples: [Float]?, generation id: Int
     ) async -> (samples: [Float], record: TranscriptionRecord)? {
-        guard let samples, !samples.isEmpty else { return nil }
+        guard let samples, samples.count >= Self.minimumSamples else { return nil }
 
         var record: TranscriptionRecord
         do {
