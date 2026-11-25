@@ -1,34 +1,75 @@
 import AppKit
 import SwiftUI
 
-/// Main window content: one tab per feature.
+/// Main window content: a sidebar of pages and the selected page.
 struct MainWindow: View {
     /// Scene identifier used to open the window.
     static let id = "main"
 
-    private enum Tab {
-        case dictation
-        case annotation
+    private enum Page: Hashable {
+        case general
+        case shortcuts
+        case microphone
+        case review
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .general: "General"
+            case .shortcuts: "Shortcuts"
+            case .microphone: "Microphone"
+            case .review: "To review"
+            }
+        }
     }
 
-    @State private var selection = Tab.dictation
+    @Environment(AnnotationStore.self) private var annotation
+    @State private var selection: Page? = .general
 
     var body: some View {
-        TabView(selection: $selection) {
-            DictationView()
-                .tabItem { Label("Dictation", systemImage: "mic") }
-                .tag(Tab.dictation)
-            AnnotationView(isActive: selection == .annotation)
-                .tabItem { Label("Annotation", systemImage: "text.badge.checkmark") }
-                .tag(Tab.annotation)
+        NavigationSplitView {
+            List(selection: $selection) {
+                Section("Dictation") {
+                    Label("General", systemImage: "gearshape").tag(Page.general)
+                    Label("Shortcuts", systemImage: "keyboard").tag(Page.shortcuts)
+                    Label("Microphone", systemImage: "mic").tag(Page.microphone)
+                }
+                Section("Data") {
+                    Label("To review", systemImage: "text.badge.checkmark")
+                        .badge(annotation.pendingCount)
+                        .tag(Page.review)
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+        } detail: {
+            let page = selection ?? .general
+            Group {
+                switch page {
+                case .general: GeneralSettingsView()
+                case .shortcuts: ShortcutSettingsView()
+                case .microphone: MicrophoneSettingsView()
+                case .review: AnnotationView(isActive: true)
+                }
+            }
+            .navigationTitle(page.title)
         }
-        .frame(minWidth: 480, minHeight: 320)
-        .onAppear { MainWindowPresenter.showInDock() }
+        .frame(minWidth: 640, minHeight: 360)
+        .task { await annotation.reload() }
+        .onAppear {
+            selection = .general
+            MainWindowPresenter.showInDock()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-            if MainWindowPresenter.concernsMainWindow(note) { MainWindowPresenter.showInDock() }
+            if MainWindowPresenter.concernsMainWindow(note) {
+                MainWindowPresenter.showInDock()
+                if selection != .review { Task { await annotation.reload() } }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
-            if MainWindowPresenter.concernsMainWindow(note) { MainWindowPresenter.hideFromDock() }
+            if MainWindowPresenter.concernsMainWindow(note) {
+                selection = .general
+                MainWindowPresenter.hideFromDock()
+            }
         }
     }
 }

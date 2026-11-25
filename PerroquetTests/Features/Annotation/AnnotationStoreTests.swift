@@ -86,6 +86,15 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.recordings.count, 2)
     }
 
+    func testPendingCountDropsAfterValidation() throws {
+        try add("b")
+        try add("a")
+        let session = store()
+        XCTAssertEqual(session.pendingCount, 2)
+        try session.save("fixed")
+        XCTAssertEqual(session.pendingCount, 1)
+    }
+
     func testSaveValidatesAndAdvancesToNextPending() throws {
         try add("b")
         try add("a")

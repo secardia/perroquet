@@ -24,6 +24,8 @@ final class AnnotationStore {
 
     /// Number of validated recordings.
     var validatedCount: Int { recordings.filter { $0.status == .validated }.count }
+    /// Number of recordings waiting for review.
+    var pendingCount: Int { recordings.filter { $0.status == .pending }.count }
     /// Whether the current recording was already validated.
     var isValidated: Bool { current?.status == .validated }
 

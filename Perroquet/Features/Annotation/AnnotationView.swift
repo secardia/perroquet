@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// Annotation tab: review pending dictations and validate or delete them.
+/// To-review page: review pending dictations and validate or delete them.
 struct AnnotationView: View {
     @Environment(AnnotationStore.self) private var store
-    /// Whether this tab is the visible one; shortcuts and playback only act then.
+    /// Whether this page is the visible one; shortcuts and playback only act then.
     let isActive: Bool
 
     @State private var player = AudioPlayer()
