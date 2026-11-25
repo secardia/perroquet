@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: debug.sh — build Debug, sign with "Perroquet Dev" when present (else ad-hoc),
+# Usage: debug.sh — build Debug, sign with "Perroquet" when present (else ad-hoc),
 # quit Perroquet and any running Perroquet Dev, then launch Perroquet Dev.
 set -euo pipefail
 

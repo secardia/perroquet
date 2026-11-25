@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: [INSTALL_DIR=<dir>] install.sh — build Release, sign with "Perroquet Dev" when present
+# Usage: [INSTALL_DIR=<dir>] install.sh — build Release, sign with "Perroquet" when present
 # (else ad-hoc), zip it, and install Perroquet.app into INSTALL_DIR (default /Applications).
 set -euo pipefail
 

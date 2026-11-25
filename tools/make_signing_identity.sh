@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the local self-signed code-signing identity "Perroquet Dev" (run once); debug.sh and install.sh sign with it.
+# Creates the local self-signed code-signing identity "Perroquet" (run once); debug.sh and install.sh sign both apps with it.
 #
 # A stable signature keeps the macOS Accessibility grant valid across rebuilds; ad-hoc signing
 # changes the code hash on every build, which silently invalidates the grant.
@@ -7,13 +7,18 @@
 # Safe to re-run: the certificate is only created when missing, while the trust and key-access
 # steps are always repeated, which repairs a half-set-up identity.
 #
+# The key-access step (`security set-key-partition-list`) labels its password prompt
+# "(deprecated)", but it is the only way to let codesign use the key: without it, every codesign
+# call of a build opens a keychain dialog, over and over.
+#
 # Usage: tools/make_signing_identity.sh
 # Env:   KEYCHAIN=<path>  target keychain (default: login keychain)
 #        SKIP_TRUST=1     do not mark the certificate as trusted
 #        SKIP_KEY_ACCESS=1  do not run set-key-partition-list (both skips are for testing only)
 set -euo pipefail
 
-NAME="Perroquet Dev"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+NAME="$SIGNING_IDENTITY"
 KEYCHAIN="${KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
 OPENSSL=/usr/bin/openssl
 
@@ -23,7 +28,14 @@ trap 'rm -rf "$WORK"' EXIT
 
 if security find-identity -p codesigning "$KEYCHAIN" | grep -q "\"$NAME\""; then
   echo "Identity \"$NAME\" already exists in $KEYCHAIN; repairing trust and key access."
-  security find-certificate -c "$NAME" -p "$KEYCHAIN" > "$WORK/cert.pem"
+  # find-certificate -c matches a substring ("Perroquet" also finds "Perroquet Dev"), so export the
+  # certificate whose SHA-1 is the one of the identity named exactly "$NAME".
+  SHA1="$(security find-identity -p codesigning "$KEYCHAIN" | awk -v name="\"$NAME\"" 'index($0, name) { print $2; exit }')"
+  security find-certificate -a -c "$NAME" -Z -p "$KEYCHAIN" | awk -v sha="$SHA1" '
+    /^SHA-1 hash:/ { keep = ($3 == sha); next }
+    keep && /-----BEGIN CERTIFICATE-----/ { pem = 1 }
+    pem { print }
+    /-----END CERTIFICATE-----/ { pem = 0 }' > "$WORK/cert.pem"
 else
   PASS="perroquet-$$"
   cat > "$WORK/cert.cnf" <<CNF

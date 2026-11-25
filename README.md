@@ -33,7 +33,7 @@ Requires [Xcode](https://developer.apple.com/xcode/) 26+.
 
 - `./debug.sh` builds and launches **Perroquet Dev** and quits Perroquet. It has its own bundle id, settings and dataset (`Application Support/Perroquet Dev`).
 - `./install.sh` builds and installs the release app.
-- `tools/make_signing_identity.sh` creates a local code-signing certificate (run it once): with it, the Accessibility grant survives rebuilds. After switching from ad-hoc signing, remove the old Perroquet entry in System Settings › Privacy & Security › Accessibility and grant it again. Only `./debug.sh` and `./install.sh` builds keep the grant (an Xcode IDE build is signed differently).
+- `tools/make_signing_identity.sh` creates the local code-signing certificate "Perroquet", which signs both apps (run it once): with it, the Accessibility grant survives rebuilds. After switching from ad-hoc signing, remove the old Perroquet entry in System Settings › Privacy & Security › Accessibility and grant it again. Only `./debug.sh` and `./install.sh` builds keep the grant (an Xcode IDE build is signed differently).
 
 ## License
 

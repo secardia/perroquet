@@ -1,5 +1,5 @@
-# Shared helpers for debug.sh and install.sh. Meant to be sourced, not run.
-# The caller must set ROOT to the repo root.
+# Shared helpers for debug.sh, install.sh and tools/make_signing_identity.sh. Meant to be sourced, not run.
+# build_app needs the caller to set ROOT to the repo root.
 
 # Falls back to /Applications/Xcode.app when only the Command Line Tools are selected.
 require_xcode() {
@@ -15,10 +15,13 @@ require_xcode() {
   fi
 }
 
-# Prints the signing identity: "Perroquet Dev" when the local identity exists, else "-" (ad hoc).
+# Name of the local self-signed code-signing identity that signs both apps (Perroquet and Perroquet Dev).
+SIGNING_IDENTITY="Perroquet"
+
+# Prints the signing identity: $SIGNING_IDENTITY when it exists, else "-" (ad hoc).
 pick_identity() {
-  if security find-identity -v -p codesigning | grep -q '"Perroquet Dev"'; then
-    echo "Perroquet Dev"
+  if security find-identity -v -p codesigning | grep -q "\"$SIGNING_IDENTITY\""; then
+    echo "$SIGNING_IDENTITY"
   else
     echo "warning: ad-hoc signing; run tools/make_signing_identity.sh once, otherwise Accessibility must be re-granted after every build." >&2
     echo "-"
