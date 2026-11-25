@@ -14,12 +14,12 @@ final class DictationController {
         /// Transcribing and pasting the last recording.
         case transcribing
 
-        /// SF Symbol shown in the menu bar.
-        var menuBarSymbol: String {
+        /// Icon shown in the menu bar.
+        var menuBarIcon: MenuBarIcon {
             switch self {
-            case .idle: "waveform"
-            case .recording: "mic.fill"
-            case .transcribing: "ellipsis"
+            case .idle: .parrot
+            case .recording: .symbol("mic.fill")
+            case .transcribing: .symbol("ellipsis")
             }
         }
     }
@@ -27,9 +27,9 @@ final class DictationController {
     /// UserDefaults key under which the recording mode is stored.
     private static let modeDefaultsKey = "recordingMode"
 
-    /// SF Symbol shown in the menu bar: the cross right after a cancel, otherwise the one of `state`.
-    var menuBarSymbol: String {
-        state == .idle && showsCancelled ? "xmark" : state.menuBarSymbol
+    /// Icon shown in the menu bar: the cross right after a cancel, otherwise the one of `state`.
+    var menuBarIcon: MenuBarIcon {
+        state == .idle && showsCancelled ? .symbol("xmark") : state.menuBarIcon
     }
 
     /// Current phase of the pipeline.
