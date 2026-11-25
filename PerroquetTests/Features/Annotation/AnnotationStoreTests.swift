@@ -25,7 +25,7 @@ final class AnnotationStoreTests: XCTestCase {
         try dataset.addPending(
             samples: [0],
             transcription: TranscriptionRecord(
-                text: text ?? "raw \(id)", confidence: 1, duration: 1, processingTime: 0,
+                text: text ?? "raw \(id)", duration: 1,
                 modelIdentifier: "m"),
             id: id)
     }
@@ -333,7 +333,7 @@ final class AnnotationStoreTests: XCTestCase {
     func testFolderWithoutAudioIsSkippedWhenItsPageLoads() async throws {
         for index in 0..<4 { try add("r\(index)") }
         let broken = dataset.root.appending(path: "Pending_Recordings/r2")
-        try FileManager.default.removeItem(at: broken.appending(path: "audio.wav"))
+        try FileManager.default.removeItem(at: broken.appending(path: "audio.flac"))
         let session = await store(pageSize: 2)
         XCTAssertEqual(session.pendingCount, 4)
         session.loadMore()

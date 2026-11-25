@@ -45,7 +45,7 @@ final class DictationControllerTests: XCTestCase {
             }
             if let error = fakes.transcribeError { throw error }
             return TranscriptionRecord(
-                text: fakes.text, confidence: 1, duration: 1, processingTime: 0.1, modelIdentifier: "m")
+                text: fakes.text, duration: 1, modelIdentifier: "m")
         }
     }
 

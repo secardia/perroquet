@@ -93,6 +93,16 @@ After the full 150-file benchmark (`bench_openwhispr.py`), the server held 4.4 G
 
 The Python wheel used in this benchmark (sherpa-onnx 2.0.1) already takes 1.8 GB right after loading, so its RAM figures above overstate what sherpa-onnx itself needs by about 1 GB.
 
+## Raw vs Oriloq-cut audio (2026-11-25)
+
+One-off check, code removed afterwards. The 2044 dictations that existed both raw and with silences cut by Oriloq were transcribed on both versions (ANE int8):
+- 49% gave the same text, 85% differed by less than 10% of words, and 2.5% by more than 30%.
+- On the 121 validated ones: WER 6.9% raw vs 7.3% cut. That gap is not significant, and the references had been annotated while listening to the cut audio.
+- Cutting reduced compute time by a third, in proportion to the audio removed.
+- On the 13 most divergent pairs, judged blind while listening to the raw audio: raw better 7 times, cut 2, equal 4. On long dictations, the cut version drifts into English mid-sentence.
+
+Decision: the dataset now stores only raw audio. Any silence trimming is applied on the fly and benchmarked on annotated raw recordings.
+
 ## Findings
 
 1. **CoreML on the ANE is the fastest and uses the least memory:** 162× real time, 39 ms for a clip under 5 s, about 730 MB in total, and the GPU stays free.

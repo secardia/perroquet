@@ -114,25 +114,8 @@ enum TranscriberError: Error {
 }
 
 extension TranscriptionRecord {
-    /// Maps a FluidAudio result, grouping token timings into words when available.
+    /// Maps a FluidAudio result.
     init(_ result: ASRResult, modelIdentifier: String) {
-        let words = result.tokenTimings
-            .map { buildWordTimings(from: $0) }
-            .flatMap { $0.isEmpty ? nil : $0 }
-            .map { timings in
-                timings.map {
-                    Word(
-                        text: $0.word,
-                        startMs: Int(($0.startTime * 1000).rounded()),
-                        endMs: Int(($0.endTime * 1000).rounded()))
-                }
-            }
-        self.init(
-            text: result.text,
-            confidence: Double(result.confidence),
-            duration: result.duration,
-            processingTime: result.processingTime,
-            modelIdentifier: modelIdentifier,
-            words: words)
+        self.init(text: result.text, duration: result.duration, modelIdentifier: modelIdentifier)
     }
 }

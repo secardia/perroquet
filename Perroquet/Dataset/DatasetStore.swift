@@ -1,10 +1,10 @@
-import CryptoKit
 import Foundation
 
 /// Reads and writes the on-disk fine-tuning dataset.
 ///
 /// Layout: `<root>/{Pending,Validated}_Recordings/<id>/` holding
-/// `audio.wav`, `transcription_raw.txt`, `transcription.txt`, `infos.json`, `metadata.json`.
+/// `audio.flac` (raw, 16 kHz mono 16-bit), `transcription_raw.txt`, `transcription.txt`, `infos.json`.
+/// Older folders may hold `audio.wav` instead; both are read.
 struct DatasetStore: Sendable {
     /// Errors raised by dataset operations.
     enum StoreError: Error, Equatable {
@@ -56,21 +56,18 @@ struct DatasetStore: Sendable {
         try? fileManager.removeItem(at: temp)
         try fileManager.createDirectory(at: temp, withIntermediateDirectories: true)
         do {
-            let wav = WAVEncoder.encode(samples: samples, sampleRate: Self.sampleRate)
-            try wav.write(to: temp.appending(path: "audio.wav"))
+            try FLACEncoder.write(
+                samples: samples, sampleRate: Self.sampleRate, to: temp.appending(path: "audio.flac"))
             try write(transcription.text, to: temp.appending(path: "transcription_raw.txt"))
             try write(transcription.text, to: temp.appending(path: "transcription.txt"))
-            try writeJSON(
-                RecordingInfos(transcription, date: date, md5: md5Hex(wav)),
-                to: temp.appending(path: "infos.json"))
-            try writeJSON(RecordingMetadata(transcription, date: date), to: temp.appending(path: "metadata.json"))
+            try writeJSON(RecordingInfos(transcription, date: date), to: temp.appending(path: "infos.json"))
             try fileManager.moveItem(at: temp, to: folder)
         } catch {
             try? fileManager.removeItem(at: temp)
             throw error
         }
         return DatasetRecording(
-            id: id, status: .pending, folder: folder, audio: folder.appending(path: "audio.wav"))
+            id: id, status: .pending, folder: folder, audio: folder.appending(path: "audio.flac"))
     }
 
     /// Lists recordings of every status folder, sorted by id.
@@ -121,7 +118,7 @@ struct DatasetStore: Sendable {
         try write(text, to: try locate(id: id).folder.appending(path: "transcription.txt"))
     }
 
-    /// Deletes the recording folder (audio, texts, metadata) for good.
+    /// Deletes the recording folder (audio, texts, infos) for good.
     func delete(id: String) throws {
         try fileManager.removeItem(at: try locate(id: id).folder)
     }
@@ -184,71 +181,18 @@ struct DatasetStore: Sendable {
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(value).write(to: url)
     }
-
-    private func md5Hex(_ data: Data) -> String {
-        Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
 }
 
-/// `infos.json` content; unknown values are left nil and omitted.
+/// `infos.json` content.
 private struct RecordingInfos: Encodable {
-    let provider = "local"
     let modelIdentifier: String
     let duration: TimeInterval
     /// Seconds since the Foundation reference date, as in Oriloq.
     let createdAt: TimeInterval
-    let confidence: Double
-    let textLength: Int
-    let md5: String
-    let words: Int?
 
-    init(_ record: TranscriptionRecord, date: Date, md5: String) {
+    init(_ record: TranscriptionRecord, date: Date) {
         modelIdentifier = record.modelIdentifier
         duration = record.duration
         createdAt = date.timeIntervalSinceReferenceDate
-        confidence = record.confidence
-        textLength = record.text.count
-        self.md5 = md5
-        words = record.words?.count
-    }
-}
-
-/// `metadata.json` content; unknown values are left nil and omitted.
-private struct RecordingMetadata: Encodable {
-    struct Word: Encodable {
-        let word: String
-        let startMs: Int
-        let endMs: Int
-
-        enum CodingKeys: String, CodingKey {
-            case word
-            case startMs = "start_ms"
-            case endMs = "end_ms"
-        }
-    }
-
-    let text: String
-    let audioDurationMs: Int
-    let processingTime: TimeInterval
-    let avgConfidence: Double
-    let timestamp: Date
-    let words: [Word]?
-
-    enum CodingKeys: String, CodingKey {
-        case text
-        case audioDurationMs = "audio_duration_ms"
-        case processingTime = "processing_time"
-        case avgConfidence = "avg_confidence"
-        case timestamp
-        case words
-    }
-
-    init(_ record: TranscriptionRecord, date: Date) {
-        text = record.text
-        audioDurationMs = Int((record.duration * 1000).rounded())
-        processingTime = record.processingTime
-        avgConfidence = record.confidence
-        timestamp = date
-        words = record.words?.map { Word(word: $0.text, startMs: $0.startMs, endMs: $0.endMs) }
     }
 }

@@ -19,7 +19,7 @@ final class DatasetRecordingTests: XCTestCase {
         try dataset.addPending(
             samples: [Float](repeating: 0, count: samples),
             transcription: TranscriptionRecord(
-                text: "t", confidence: 1, duration: reportedDuration, processingTime: 0, modelIdentifier: "m"),
+                text: "t", duration: reportedDuration, modelIdentifier: "m"),
             id: "a")
     }
 

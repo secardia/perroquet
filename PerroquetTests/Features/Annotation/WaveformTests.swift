@@ -5,7 +5,7 @@ final class WaveformTests: XCTestCase {
     private var url: URL!
 
     override func setUp() {
-        url = FileManager.default.temporaryDirectory.appending(path: "WaveformTests-\(UUID().uuidString).wav")
+        url = FileManager.default.temporaryDirectory.appending(path: "WaveformTests-\(UUID().uuidString).flac")
     }
 
     override func tearDown() {
@@ -14,7 +14,7 @@ final class WaveformTests: XCTestCase {
 
     func testPeaksFollowTheLoudnessOfEachSlice() async throws {
         let samples = [Float](repeating: 0.1, count: 8_000) + [Float](repeating: 0.5, count: 8_000)
-        try WAVEncoder.encode(samples: samples, sampleRate: 16_000).write(to: url)
+        try FLACEncoder.write(samples: samples, sampleRate: 16_000, to: url)
         let peaks = await Waveform.peaks(of: url, buckets: 10)
         XCTAssertEqual(peaks.count, 10)
         XCTAssertEqual(peaks[0], 0.2, accuracy: 0.01)
@@ -23,7 +23,7 @@ final class WaveformTests: XCTestCase {
     }
 
     func testSilenceStaysFlat() async throws {
-        try WAVEncoder.encode(samples: [Float](repeating: 0, count: 1_600), sampleRate: 16_000).write(to: url)
+        try FLACEncoder.write(samples: [Float](repeating: 0, count: 1_600), sampleRate: 16_000, to: url)
         let peaks = await Waveform.peaks(of: url, buckets: 5)
         XCTAssertEqual(peaks, [0, 0, 0, 0, 0])
     }

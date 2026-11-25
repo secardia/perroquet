@@ -20,7 +20,7 @@ final class ValidatedStoreTests: XCTestCase {
         try dataset.addPending(
             samples: [0],
             transcription: TranscriptionRecord(
-                text: "raw \(id)", confidence: 1, duration: 1, processingTime: 0, modelIdentifier: "m"),
+                text: "raw \(id)", duration: 1, modelIdentifier: "m"),
             id: id)
         try dataset.validate(id: id, text: text)
     }
@@ -37,7 +37,7 @@ final class ValidatedStoreTests: XCTestCase {
         try dataset.addPending(
             samples: [0],
             transcription: TranscriptionRecord(
-                text: "p", confidence: 1, duration: 1, processingTime: 0, modelIdentifier: "m"),
+                text: "p", duration: 1, modelIdentifier: "m"),
             id: "c")
         let store = await loadedStore()
         XCTAssertEqual(store.recordings.map(\.id), ["b", "a"])

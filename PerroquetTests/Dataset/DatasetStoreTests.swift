@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import Perroquet
 
@@ -15,10 +16,8 @@ final class DatasetStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
-    private func record(words: [TranscriptionRecord.Word]? = nil) -> TranscriptionRecord {
-        TranscriptionRecord(
-            text: "hello world", confidence: 0.9, duration: 1.5, processingTime: 0.2,
-            modelIdentifier: "model/x", words: words)
+    private func record() -> TranscriptionRecord {
+        TranscriptionRecord(text: "hello world", duration: 1.5, modelIdentifier: "model/x")
     }
 
     private func text(_ url: URL) throws -> String {
@@ -74,43 +73,46 @@ final class DatasetStoreTests: XCTestCase {
         XCTAssertNil(RecordingID.date(from: ""))
     }
 
-    func testAddPendingWritesAllFiles() throws {
-        let words = [TranscriptionRecord.Word(text: "hello", startMs: 0, endMs: 300)]
-        let recording = try store.addPending(samples: [0, 0.5, -0.5, 1], transcription: record(words: words))
+    func testAddPendingWritesExactlyTheRawFolder() throws {
+        let samples = [Float](repeating: 0.25, count: 4_800)
+        let recording = try store.addPending(
+            samples: samples, transcription: record(), date: Date(timeIntervalSinceReferenceDate: 1_000))
         XCTAssertEqual(recording.status, .pending)
-        for name in ["audio.wav", "transcription_raw.txt", "transcription.txt", "infos.json", "metadata.json"] {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: recording.folder.appending(path: name).path), name)
-        }
+        XCTAssertEqual(recording.audio.lastPathComponent, "audio.flac")
+        let names = try FileManager.default.contentsOfDirectory(atPath: recording.folder.path).sorted()
+        XCTAssertEqual(names, ["audio.flac", "infos.json", "transcription.txt", "transcription_raw.txt"])
         XCTAssertEqual(try text(recording.folder.appending(path: "transcription_raw.txt")), "hello world")
         XCTAssertEqual(try text(recording.folder.appending(path: "transcription.txt")), "hello world")
 
-        let wav = try Data(contentsOf: recording.audio)
-        XCTAssertEqual(String(decoding: wav[0..<4], as: UTF8.self), "RIFF")
-        XCTAssertEqual(wav.subdata(in: 22..<24), Data([1, 0]))
-        XCTAssertEqual(wav.subdata(in: 24..<28), Data([0x80, 0x3E, 0, 0]))
-        XCTAssertEqual(wav.count, 44 + 8)
+        let file = try AVAudioFile(forReading: recording.audio)
+        XCTAssertEqual(file.length, 4_800)
+        XCTAssertEqual(file.fileFormat.sampleRate, 16_000)
+        XCTAssertEqual(file.fileFormat.channelCount, 1)
+        XCTAssertEqual(file.fileFormat.settings[AVFormatIDKey] as? UInt32, kAudioFormatFLAC)
 
         let infos = try json(recording.folder.appending(path: "infos.json"))
-        XCTAssertEqual(infos["provider"] as? String, "local")
+        XCTAssertEqual(Set(infos.keys), ["createdAt", "duration", "modelIdentifier"])
         XCTAssertEqual(infos["modelIdentifier"] as? String, "model/x")
-        XCTAssertEqual(infos["textLength"] as? Int, 11)
-        XCTAssertEqual(infos["words"] as? Int, 1)
-        XCTAssertNotNil(infos["md5"])
-        XCTAssertNil(infos["language"])
-
-        let metadata = try json(recording.folder.appending(path: "metadata.json"))
-        XCTAssertEqual(metadata["audio_duration_ms"] as? Int, 1500)
-        let metaWords = try XCTUnwrap(metadata["words"] as? [[String: Any]])
-        XCTAssertEqual(metaWords.first?["word"] as? String, "hello")
-        XCTAssertEqual(metaWords.first?["end_ms"] as? Int, 300)
-        XCTAssertNotNil(metadata["timestamp"] as? String)
-        XCTAssertNil(metadata["language"])
+        XCTAssertEqual(infos["duration"] as? Double, 1.5)
+        XCTAssertEqual(infos["createdAt"] as? Double, 1_000)
     }
 
-    func testWordsOmittedWhenUnknown() throws {
-        let recording = try store.addPending(samples: [0], transcription: record())
-        XCTAssertNil(try json(recording.folder.appending(path: "infos.json"))["words"])
-        XCTAssertNil(try json(recording.folder.appending(path: "metadata.json"))["words"])
+    func testStoredAudioKeepsTheSamples() throws {
+        let recording = try store.addPending(samples: [0, 0.5, -0.5], transcription: record())
+        let file = try AVAudioFile(forReading: recording.audio, commonFormat: .pcmFormatFloat32, interleaved: false)
+        XCTAssertEqual(file.length, AVAudioFramePosition(FLACEncoder.minimumFrames))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 3))
+        try file.read(into: buffer, frameCount: 3)
+        let decoded = try XCTUnwrap(buffer.floatChannelData?[0])
+        XCTAssertEqual(decoded[1], 0.5, accuracy: 0.001)
+        XCTAssertEqual(decoded[2], -0.5, accuracy: 0.001)
+    }
+
+    func testWAVOnlyLegacyFolderIsStillListed() throws {
+        let folder = root.appending(path: "Pending_Recordings/20260101-000000-W", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data().write(to: folder.appending(path: "audio.wav"))
+        XCTAssertEqual(store.list().first?.audio.lastPathComponent, "audio.wav")
     }
 
     func testValidateMovesAndRewritesTranscription() throws {
