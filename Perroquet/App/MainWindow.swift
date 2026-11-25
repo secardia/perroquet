@@ -25,14 +25,10 @@ struct MainWindow: View {
         .frame(minWidth: 480, minHeight: 320)
         .onAppear { MainWindowPresenter.showInDock() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-            if let window = note.object as? NSWindow, MainWindowPresenter.isMainWindow(window) {
-                MainWindowPresenter.showInDock()
-            }
+            if MainWindowPresenter.concernsMainWindow(note) { MainWindowPresenter.showInDock() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
-            if let window = note.object as? NSWindow, MainWindowPresenter.isMainWindow(window) {
-                MainWindowPresenter.hideFromDock()
-            }
+            if MainWindowPresenter.concernsMainWindow(note) { MainWindowPresenter.hideFromDock() }
         }
     }
 }
