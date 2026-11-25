@@ -1,15 +1,15 @@
 import Foundation
 import Observation
 
-/// Annotation session over the Perroquet dataset.
+/// Review session over the pending recordings of the Perroquet dataset.
 ///
-/// Walks recordings newest first: "next" means the next older pending one, "previous" steps back to
-/// the next newer recording regardless of status. Saving validates a recording, deleting removes it
-/// from the dataset.
+/// The queue holds pending recordings only, newest first: `next()` goes to the next older one and
+/// `previous()` to the next newer one, without saving. Validating a recording takes it out of the queue,
+/// deleting removes it from the dataset.
 @MainActor
 @Observable
 final class AnnotationStore {
-    /// Every recording of the dataset, newest first.
+    /// Pending recordings, newest first.
     private(set) var recordings: [DatasetRecording] = []
     /// Recording being reviewed; nil when no recording is pending (all-done state).
     private(set) var current: DatasetRecording?
@@ -22,12 +22,8 @@ final class AnnotationStore {
     @ObservationIgnored private var autoplayRequested = false
     @ObservationIgnored private var generation = 0
 
-    /// Number of validated recordings.
-    var validatedCount: Int { recordings.filter { $0.status == .validated }.count }
     /// Number of recordings waiting for review.
-    var pendingCount: Int { recordings.filter { $0.status == .pending }.count }
-    /// Whether the current recording was already validated.
-    var isValidated: Bool { current?.status == .validated }
+    var pendingCount: Int { recordings.count }
 
     /// Opens a session on `dataset`, positioned on the first pending recording.
     ///
@@ -39,13 +35,13 @@ final class AnnotationStore {
         self.dataset = dataset
         self.scan = scan
         lastSignature = dataset.signature()
-        recordings = dataset.list().reversed()
-        moveTo(recordings.first { $0.status == .pending }, explicit: false)
+        recordings = dataset.list().reversed().filter { $0.status == .pending }
+        moveTo(recordings.first, explicit: false)
     }
 
     /// Lists the dataset newest first on a background task.
     nonisolated static func scanOffMain(_ dataset: DatasetStore) async -> [DatasetRecording] {
-        await Task.detached { Array(dataset.list().reversed()) }.value
+        await Task.detached { dataset.list().reversed().filter { $0.status == .pending } }.value
     }
 
     /// Returns whether the current recording was reached by an explicit action (save, delete,
@@ -68,8 +64,8 @@ final class AnnotationStore {
         lastSignature = signature
         let known = Set(recordings.map(\.id))
         recordings = listed
-        let newest = listed.first { $0.status == .pending }
-        let hasNewPending = listed.contains { $0.status == .pending && !known.contains($0.id) }
+        let newest = listed.first
+        let hasNewPending = listed.contains { !known.contains($0.id) }
         if hasNewPending, let newest {
             moveTo(newest, explicit: false)
         } else if let id = current?.id, let refreshed = listed.first(where: { $0.id == id }) {
@@ -83,7 +79,8 @@ final class AnnotationStore {
     /// advances to the next pending one. Throws on failure, leaving the position unchanged.
     func save(_ text: String) throws {
         guard let current else { return }
-        replace(try dataset.validate(id: current.id, text: text))
+        _ = try dataset.validate(id: current.id, text: text)
+        recordings.removeAll { $0.id == current.id }
         generation += 1
         advance(after: current.id)
     }
@@ -98,26 +95,30 @@ final class AnnotationStore {
         advance(after: current.id)
     }
 
-    /// Goes back one recording in the newest-first order, whatever its status. No-op on the newest one;
-    /// from the all-done state goes to the oldest recording.
+    /// Goes to the next newer pending recording, without saving. No-op on the newest one.
     func previous() {
-        guard !recordings.isEmpty else { return }
-        guard let current, let index = recordings.firstIndex(where: { $0.id == current.id }) else {
-            moveTo(recordings.last, explicit: true)
-            return
-        }
-        if index > 0 { moveTo(recordings[index - 1], explicit: true) }
+        guard let index = currentIndex, index > 0 else { return }
+        moveTo(recordings[index - 1], explicit: true)
     }
 
-    private func replace(_ updated: DatasetRecording) {
-        if let index = recordings.firstIndex(where: { $0.id == updated.id }) {
-            recordings[index] = updated
-        }
+    /// Goes to the next older pending recording, without saving. No-op on the oldest one.
+    func next() {
+        guard let index = currentIndex, index + 1 < recordings.count else { return }
+        moveTo(recordings[index + 1], explicit: true)
+    }
+
+    /// Whether a newer pending recording exists.
+    var hasPrevious: Bool { currentIndex.map { $0 > 0 } ?? false }
+    /// Whether an older pending recording exists.
+    var hasNext: Bool { currentIndex.map { $0 + 1 < recordings.count } ?? false }
+
+    private var currentIndex: Int? {
+        guard let id = current?.id else { return nil }
+        return recordings.firstIndex { $0.id == id }
     }
 
     private func advance(after id: String) {
-        let pending = recordings.filter { $0.status == .pending }
-        moveTo(pending.first { $0.id < id } ?? pending.first, explicit: true)
+        moveTo(recordings.first { $0.id < id } ?? recordings.first, explicit: true)
     }
 
     private func moveTo(_ recording: DatasetRecording?, explicit: Bool) {

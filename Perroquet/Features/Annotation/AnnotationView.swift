@@ -1,162 +1,50 @@
 import AppKit
 import SwiftUI
 
-/// To-review page: review pending dictations and validate or delete them.
+/// "To review" page: pending dictations one at a time, to correct and validate or delete.
 struct AnnotationView: View {
     @Environment(AnnotationStore.self) private var store
-    /// Whether this page is the visible one; shortcuts and playback only act then.
-    let isActive: Bool
 
-    @State private var player = AudioPlayer()
     @State private var draft = ""
-    @State private var saveError: String?
-    @State private var scrubTime: TimeInterval?
-    @AppStorage("autoplay") private var autoplay = true
-    @AppStorage("playbackRate") private var rate = 1.0
-    @FocusState private var editorFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        Group {
             if let current = store.current {
-                editor(for: current)
+                RecordingEditor(
+                    recording: current,
+                    text: $draft,
+                    shouldAutoplay: store.takeAutoplayRequest,
+                    onDelete: store.delete,
+                    onValidate: { try store.save(draft) })
             } else {
-                Text("Nothing left to annotate")
-                    .font(.title2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView("All reviewed", systemImage: "checkmark.circle")
             }
-            if let message = saveError ?? player.errorMessage {
-                Text(message).foregroundStyle(.red)
-            }
-            buttons
         }
-        .padding()
-        .task(id: isActive) { if isActive { await store.reload() } }
+        .navigationSubtitle(subtitle)
+        .toolbar {
+            ToolbarItemGroup {
+                Text("\(store.pendingCount) to review").foregroundStyle(.secondary)
+                Button(action: store.previous) {
+                    Label("Newer", systemImage: "chevron.up")
+                }
+                .disabled(!store.hasPrevious)
+                .help("Newer")
+                Button(action: store.next) {
+                    Label("Older", systemImage: "chevron.down")
+                }
+                .disabled(!store.hasNext)
+                .help("Older")
+            }
+        }
+        .task { await store.reload() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            if isActive { Task { await store.reload() } }
+            Task { await store.reload() }
         }
-        .task(id: store.current?.id) { arrive() }
-        .onChange(of: isActive) {
-            if isActive {
-                load(autoplay: false)
-            } else {
-                player.stop()
-            }
-        }
-        .onDisappear { player.stop() }
-        .onChange(of: rate) { player.setRate(rate) }
+        .task(id: store.current?.id) { draft = store.currentText }
     }
 
-    private var title: String {
-        guard let id = store.current?.id else { return String(localized: "Done") }
-        return RecordingID.date(from: id)?.formatted(date: .abbreviated, time: .standard) ?? id
-    }
-
-    private var header: some View {
-        HStack {
-            Text(title).font(.headline).textSelection(.enabled)
-            if store.isValidated {
-                Text("validated")
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .background(Color.green.opacity(0.25), in: Capsule())
-            }
-            Spacer()
-            Text("\(store.validatedCount) / \(store.recordings.count) validated")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func editor(for recording: DatasetRecording) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                shortcutButton(player.isPlaying ? "Pause" : "Play", .space, .control, glyph: "Space") {
-                    player.togglePlayPause()
-                }
-                Toggle("Autoplay", isOn: $autoplay)
-                Picker("Speed", selection: $rate) {
-                    ForEach(Self.rates, id: \.self) { Text("\(Self.format(rate: $0))×").tag($0) }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            HStack {
-                Text(Self.format(scrubTime ?? player.currentTime)).monospacedDigit()
-                Slider(
-                    value: Binding(
-                        get: { scrubTime ?? player.currentTime },
-                        set: { scrubTime = $0 }
-                    ),
-                    in: 0...max(player.duration, 0.1)
-                ) { editing in
-                    if !editing, let time = scrubTime {
-                        player.seek(to: time)
-                        scrubTime = nil
-                    }
-                }
-                .disabled(player.duration == 0)
-                Text(Self.format(player.duration)).monospacedDigit()
-            }
-            TextEditor(text: $draft)
-                .font(.title3)
-                .focused($editorFocused)
-        }
-    }
-
-    private static let rates = [0.75, 1, 1.5, 2, 2.5, 3]
-
-    private static func format(rate: Double) -> String {
-        rate.formatted(.number.precision(.fractionLength(0...2)))
-    }
-
-    private static func format(_ seconds: TimeInterval) -> String {
-        Duration.seconds(seconds.rounded(.down)).formatted(.time(pattern: .minuteSecond))
-    }
-
-    private var buttons: some View {
-        HStack {
-            Button("Previous") { navigate { store.previous() } }
-            Spacer()
-            if store.current != nil {
-                Button("Delete") { navigate { try store.delete() } }
-                shortcutButton("Save & Next", .return, .command, glyph: "↩") { navigate { try store.save(draft) } }
-            }
-        }
-    }
-
-    private func shortcutButton(
-        _ title: LocalizedStringResource, _ key: KeyEquivalent, _ modifiers: EventModifiers, glyph: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        let symbol = (modifiers.contains(.control) ? "⌃" : "") + (modifiers.contains(.command) ? "⌘" : "")
-        return Button(action: action) {
-            Text("\(Text(title))  \(Text(verbatim: "\(symbol)\(glyph)").foregroundStyle(.secondary))")
-        }
-        .keyboardShortcut(isActive ? KeyboardShortcut(key, modifiers: modifiers) : nil)
-    }
-
-    private func navigate(_ action: () throws -> Void) {
-        do {
-            try action()
-        } catch {
-            saveError = error.localizedDescription
-        }
-    }
-
-    private func arrive() {
-        draft = store.currentText
-        saveError = nil
-        let requested = store.takeAutoplayRequest()
-        load(autoplay: autoplay && requested)
-    }
-
-    private func load(autoplay: Bool) {
-        if let current = store.current, isActive {
-            player.setRate(rate)
-            player.load(current.audio, autoplay: autoplay)
-            editorFocused = true
-        } else {
-            player.stop()
-        }
+    private var subtitle: String {
+        guard let id = store.current?.id else { return "" }
+        return RecordingID.date(from: id)?.formatted(.dateTime.weekday(.wide).day().month(.wide).hour().minute()) ?? id
     }
 }

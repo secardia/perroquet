@@ -28,62 +28,25 @@ final class AnnotationStoreTests: XCTestCase {
 
     private func store() -> AnnotationStore { AnnotationStore(dataset: dataset) }
 
-    func testOpensOnNewestPending() throws {
+    func testOpensOnNewestPendingOnly() throws {
         try add("a")
         try add("b")
         try add("c")
         try dataset.validate(id: "c", text: "done")
         let session = store()
-        XCTAssertEqual(session.recordings.map(\.id), ["c", "b", "a"])
+        XCTAssertEqual(session.recordings.map(\.id), ["b", "a"])
         XCTAssertEqual(session.current?.id, "b")
+        XCTAssertEqual(session.pendingCount, 2)
     }
 
-    func testSaveGoesToNextOlderPendingThenWrapsToNewest() throws {
-        try add("a")
-        try add("b")
-        try add("c")
-        let session = store()
-        XCTAssertEqual(session.current?.id, "c")
-        try session.save("C")
-        XCTAssertEqual(session.current?.id, "b")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "c")
-        _ = session.takeAutoplayRequest()
-        session.previous()
-        XCTAssertEqual(session.current?.id, "c")
-        XCTAssertFalse(session.takeAutoplayRequest())
-        try session.save("again")
-        XCTAssertEqual(session.current?.id, "b")
-        try session.save("B")
-        XCTAssertEqual(session.current?.id, "a")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "b")
-        session.previous()
-        session.previous()
-        try session.save("again")
-        XCTAssertEqual(session.current?.id, "a")
-    }
-
-    func testSavingAfterReloadJumpContinuesToOlderPending() async throws {
-        try add("a")
-        let session = store()
-        try add("b")
-        try add("c")
-        await session.reload()
-        XCTAssertEqual(session.current?.id, "c")
-        try session.save("C")
-        XCTAssertEqual(session.current?.id, "b")
-    }
-
-    func testOpensOnFirstPendingWithVerbatimText() throws {
+    func testOpensWithVerbatimText() throws {
         try add("a")
         try add("b", text: "hello\n")
         try dataset.validate(id: "a", text: "done")
         let session = store()
         XCTAssertEqual(session.current?.id, "b")
         XCTAssertEqual(session.currentText, "hello\n")
-        XCTAssertEqual(session.validatedCount, 1)
-        XCTAssertEqual(session.recordings.count, 2)
+        XCTAssertEqual(session.recordings.count, 1)
     }
 
     func testPendingCountDropsAfterValidation() throws {
@@ -95,16 +58,66 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.pendingCount, 1)
     }
 
-    func testSaveValidatesAndAdvancesToNextPending() throws {
+    func testSaveValidatesAndAdvancesToNextOlderPending() throws {
         try add("b")
         try add("a")
         let session = store()
-        try session.save("fixed a")
+        try session.save("fixed b")
         XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(session.validatedCount, 1)
         let first = try XCTUnwrap(dataset.list().first { $0.id == "b" })
         XCTAssertEqual(first.status, .validated)
-        XCTAssertEqual(first.readTranscription(), "fixed a")
+        XCTAssertEqual(first.readTranscription(), "fixed b")
+    }
+
+    func testSaveOnOldestWrapsToNewestThenEnds() throws {
+        try add("a")
+        try add("b")
+        try add("c")
+        let session = store()
+        session.next()
+        session.next()
+        XCTAssertEqual(session.current?.id, "a")
+        try session.save("A")
+        XCTAssertEqual(session.current?.id, "c")
+        try session.save("C")
+        try session.save("B")
+        XCTAssertNil(session.current)
+    }
+
+    func testValidatedRecordingNeverComesBack() throws {
+        try add("c")
+        try add("b")
+        try add("a")
+        let session = store()
+        try session.save("C")
+        XCTAssertEqual(session.current?.id, "b")
+        session.previous()
+        XCTAssertEqual(session.current?.id, "b")
+        session.next()
+        session.next()
+        XCTAssertEqual(session.current?.id, "a")
+        XCTAssertEqual(session.recordings.map(\.id), ["b", "a"])
+    }
+
+    func testNextAndPreviousMoveWithoutSaving() throws {
+        try add("c", text: "tc")
+        try add("b", text: "tb")
+        try add("a", text: "ta")
+        let session = store()
+        session.next()
+        XCTAssertEqual(session.current?.id, "b")
+        XCTAssertEqual(session.currentText, "tb")
+        session.next()
+        XCTAssertEqual(session.current?.id, "a")
+        session.next()
+        XCTAssertEqual(session.current?.id, "a")
+        session.previous()
+        session.previous()
+        XCTAssertEqual(session.current?.id, "c")
+        session.previous()
+        XCTAssertEqual(session.current?.id, "c")
+        XCTAssertEqual(session.pendingCount, 3)
+        XCTAssertTrue(dataset.list().allSatisfy { $0.status == .pending })
     }
 
     func testDeleteRemovesFromDiskAndAdvances() throws {
@@ -118,63 +131,17 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: first.folder.path))
     }
 
-    func testAllDoneThenPreviousGoesToLast() throws {
+    func testAllReviewedLeavesNothingCurrent() throws {
         try add("b")
         try add("a")
         let session = store()
         try session.save("x")
         try session.delete()
         XCTAssertNil(session.current)
-        XCTAssertEqual(session.validatedCount, 1)
-        XCTAssertEqual(session.recordings.count, 1)
+        XCTAssertEqual(session.pendingCount, 0)
         session.previous()
-        XCTAssertEqual(session.current?.id, "b")
-        XCTAssertEqual(session.current?.status, .validated)
-    }
-
-    func testPreviousSkipsDeletedAndResaveValidated() async throws {
-        try add("c")
-        try add("b")
-        try add("a")
-        let session = store()
-        try session.save("A")
-        try session.delete()
-        XCTAssertEqual(session.current?.id, "a")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "c")
-        XCTAssertEqual(session.currentText, "A")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "c")
-
-        await session.reload()
-        try session.save("A2")
-        XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(dataset.list().first { $0.id == "c" }?.readTranscription(), "A2")
-        XCTAssertNil(dataset.list().first { $0.id == "b" })
-    }
-
-    func testDeleteValidatedReachedByPrevious() throws {
-        try add("b")
-        try add("a")
-        let session = store()
-        try session.save("B")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "b")
-        try session.delete()
-        XCTAssertEqual(session.current?.id, "a")
-        XCTAssertEqual(dataset.list().map(\.id), ["a"])
-    }
-
-    func testResaveBackInTheMiddleReturnsToPending() throws {
-        try add("c")
-        try add("b")
-        try add("a")
-        let session = store()
-        try session.save("A")
-        XCTAssertEqual(session.current?.id, "b")
-        session.previous()
-        try session.save("A again")
-        XCTAssertEqual(session.current?.id, "b")
+        session.next()
+        XCTAssertNil(session.current)
     }
 
     func testReloadPicksUpNewPendingAfterAllDone() async throws {
@@ -185,7 +152,7 @@ final class AnnotationStoreTests: XCTestCase {
         try add("b")
         await session.reload()
         XCTAssertEqual(session.current?.id, "b")
-        XCTAssertEqual(session.recordings.count, 2)
+        XCTAssertEqual(session.recordings.count, 1)
     }
 
     func testReloadJumpsToNewestWhenNewDictationArrives() async throws {
@@ -206,6 +173,7 @@ final class AnnotationStoreTests: XCTestCase {
         try dataset.validate(id: "a", text: "done")
         await session.reload()
         XCTAssertEqual(session.current?.id, "b")
+        XCTAssertEqual(session.pendingCount, 1)
     }
 
     func testReloadAfterSaveDoesNotJumpBackToNewest() async throws {
@@ -228,11 +196,13 @@ final class AnnotationStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: clash, withIntermediateDirectories: true)
         XCTAssertThrowsError(try session.save("x"))
         XCTAssertEqual(session.current?.id, "b")
+        XCTAssertEqual(session.pendingCount, 2)
         XCTAssertEqual(first.readTranscription(), "raw b")
         XCTAssertTrue(FileManager.default.fileExists(atPath: first.folder.path))
     }
 
     func testAutoplayOnlyAfterExplicitNavigation() async throws {
+        try add("d")
         try add("c")
         try add("b")
         try add("a")
@@ -241,11 +211,14 @@ final class AnnotationStoreTests: XCTestCase {
         await session.reload()
         XCTAssertFalse(session.takeAutoplayRequest())
 
-        try session.save("A")
+        try session.save("D")
         XCTAssertTrue(session.takeAutoplayRequest())
         XCTAssertFalse(session.takeAutoplayRequest())
 
         try session.delete()
+        XCTAssertTrue(session.takeAutoplayRequest())
+
+        session.next()
         XCTAssertTrue(session.takeAutoplayRequest())
 
         session.previous()
@@ -256,6 +229,7 @@ final class AnnotationStoreTests: XCTestCase {
         try add("a")
         let session = store()
         session.previous()
+        session.next()
         XCTAssertFalse(session.takeAutoplayRequest())
         try session.save("A")
         XCTAssertNil(session.current)
@@ -273,18 +247,18 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertFalse(session.takeAutoplayRequest())
     }
 
-    func testTextStaysCorrectAfterSaveDeletePrevious() throws {
+    func testTextStaysCorrectAfterSaveDeleteNavigation() throws {
         try add("c", text: "tc")
         try add("b", text: "tb")
         try add("a", text: "ta")
         let session = store()
-        try session.save("A fixed")
+        try session.save("C fixed")
         XCTAssertEqual(session.currentText, "tb")
         try session.delete()
         XCTAssertEqual(session.currentText, "ta")
         session.previous()
-        XCTAssertEqual(session.currentText, "A fixed")
-        XCTAssertEqual(session.recordings.first?.readTranscription(), "A fixed")
+        XCTAssertNil(session.recordings.first { $0.id == "c" })
+        XCTAssertEqual(session.current?.id, "a")
     }
 
     func testReloadDuringSaveKeepsInMemoryUpdate() async throws {
@@ -293,7 +267,7 @@ final class AnnotationStoreTests: XCTestCase {
         let entered = AsyncStream<Void>.makeStream()
         let release = AsyncStream<Void>.makeStream()
         let session = AnnotationStore(dataset: dataset) { dataset in
-            let snapshot = Array(dataset.list().reversed())
+            let snapshot = dataset.list().reversed().filter { $0.status == .pending }
             entered.continuation.yield()
             for await _ in release.stream { break }
             return snapshot
@@ -301,10 +275,10 @@ final class AnnotationStoreTests: XCTestCase {
         try add("c")
         let reloading = Task { await session.reload() }
         for await _ in entered.stream { break }
-        try session.save("B")
+        try session.save("C")
         release.continuation.yield()
         await reloading.value
-        XCTAssertEqual(session.recordings.first { $0.id == "b" }?.status, .validated)
+        XCTAssertNil(session.recordings.first { $0.id == "b" })
         XCTAssertNotEqual(session.current?.id, "b")
     }
 
@@ -312,7 +286,8 @@ final class AnnotationStoreTests: XCTestCase {
         let session = store()
         XCTAssertNil(session.current)
         session.previous()
+        session.next()
         XCTAssertNil(session.current)
-        XCTAssertEqual(session.validatedCount, 0)
+        XCTAssertEqual(session.pendingCount, 0)
     }
 }

@@ -49,7 +49,7 @@ struct MainWindow: View {
                 case .general: GeneralSettingsView()
                 case .shortcuts: ShortcutSettingsView()
                 case .microphone: MicrophoneSettingsView()
-                case .review: AnnotationView(isActive: true)
+                case .review: AnnotationView()
                 }
             }
             .navigationTitle(page.title)
