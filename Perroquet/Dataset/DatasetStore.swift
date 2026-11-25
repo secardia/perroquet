@@ -21,10 +21,15 @@ struct DatasetStore: Sendable {
     let root: URL
     private var fileManager: FileManager { .default }
 
-    /// Default location: `~/Library/Application Support/Perroquet/FineTuningDataset`.
+    /// Default location: `~/Library/Application Support/<app name>/FineTuningDataset`.
     static var defaultRoot: URL {
+        root(forApp: Bundle.main.appName)
+    }
+
+    /// Dataset root for the app with this display name, so dev and prod never share data.
+    static func root(forApp name: String) -> URL {
         URL.applicationSupportDirectory
-            .appending(path: "Perroquet", directoryHint: .isDirectory)
+            .appending(path: name, directoryHint: .isDirectory)
             .appending(path: "FineTuningDataset", directoryHint: .isDirectory)
     }
 

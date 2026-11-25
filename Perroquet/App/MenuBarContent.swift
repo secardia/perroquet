@@ -11,7 +11,7 @@ struct MenuBarContent: View {
             LastDictationCard()
 
             HStack {
-                Button("Open Perroquet") {
+                Button("Open \(Bundle.main.appName)") {
                     openWindow(id: MainWindow.id)
                     MainWindowPresenter.bringToFront()
                     dismiss()

@@ -29,6 +29,16 @@ final class DatasetStoreTests: XCTestCase {
         try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 
+    func testRootIsSeparatedPerAppName() {
+        let support = URL.applicationSupportDirectory
+        XCTAssertEqual(
+            DatasetStore.root(forApp: "Perroquet Dev").path,
+            support.appending(path: "Perroquet Dev/FineTuningDataset").path)
+        XCTAssertEqual(
+            DatasetStore.root(forApp: "Perroquet").path,
+            support.appending(path: "Perroquet/FineTuningDataset").path)
+    }
+
     func testIDFormatAndOrdering() {
         let uuid = UUID()
         let early = RecordingID.make(date: Date(timeIntervalSince1970: 1_800_000_000), uuid: uuid)

@@ -1,0 +1,80 @@
+{
+  "fill": "system-dark",
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "eye.png",
+          "name": "Eye"
+        },
+        {
+          "image-name": "head.png",
+          "name": "Head",
+          "fill": {
+            "linear-gradient": [
+              "srgb:1.00000,0.26000,0.24000,1.00000",
+              "srgb:0.88000,0.04000,0.16000,1.00000"
+            ],
+            "orientation": {
+              "start": {
+                "x": 0.5,
+                "y": 0
+              },
+              "stop": {
+                "x": 0.5,
+                "y": 1
+              }
+            }
+          }
+        },
+        {
+          "image-name": "upper-beak.png",
+          "name": "Upper beak",
+          "fill": {
+            "linear-gradient": [
+              "srgb:1.00000,0.87843,0.47843,1.00000",
+              "srgb:0.96078,0.65098,0.13725,1.00000"
+            ],
+            "orientation": {
+              "start": {
+                "x": 0.5,
+                "y": 0
+              },
+              "stop": {
+                "x": 0.5,
+                "y": 1
+              }
+            }
+          }
+        },
+        {
+          "image-name": "lower-beak.png",
+          "name": "Lower beak"
+        },
+        {
+          "image-name": "crest.png",
+          "name": "Crest"
+        },
+        {
+          "image-name": "waves.png",
+          "name": "Waves",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.42
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

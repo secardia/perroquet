@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the local self-signed code-signing identity "Perroquet Dev" (run once).
+# Creates the local self-signed code-signing identity "Perroquet Dev" (run once); debug.sh and install.sh sign with it.
 #
 # A stable signature keeps the macOS Accessibility grant valid across rebuilds; ad-hoc signing
 # changes the code hash on every build, which silently invalidates the grant.
@@ -64,7 +64,7 @@ if [[ "${SKIP_KEY_ACCESS:-}" != 1 ]]; then
 fi
 
 if [[ "$CREATED" == 1 || "$WAS_VALID" == 0 ]]; then
-  echo "Rebuild with ./run.sh, then remove the old Perroquet entry in"
+  echo "Rebuild with ./debug.sh or ./install.sh, then remove the old Perroquet entry in"
   echo "System Settings > Privacy & Security > Accessibility and grant it again."
 else
   echo "Identity \"$NAME\" repaired."

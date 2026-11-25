@@ -43,7 +43,7 @@ struct PerroquetApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Perroquet", id: MainWindow.id) {
+        Window(Bundle.main.appName, id: MainWindow.id) {
             MainWindow()
                 .environment(controller)
                 .environment(transcriber)

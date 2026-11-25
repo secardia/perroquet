@@ -66,7 +66,7 @@ struct Paster: TextPasting {
 
         /// Message shown to the user.
         var errorDescription: String? {
-            "Accessibility access is required to paste. Enable Perroquet in System Settings."
+            "Accessibility access is required to paste. Enable \(Bundle.main.appName) in System Settings."
         }
     }
 
