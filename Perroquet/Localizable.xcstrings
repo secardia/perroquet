@@ -431,6 +431,16 @@
         }
       }
     },
+    "No microphone is available.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun micro n’est disponible."
+          }
+        }
+      }
+    },
     "No validated dictations": {
       "localizations": {
         "fr": {

@@ -5,10 +5,11 @@ import Synchronization
 
 /// Records the chosen microphone, or the system default, as 16 kHz mono Float32 samples.
 ///
-/// One engine is kept for the chosen device and only paused between dictations: its input unit stays initialized
-/// but the hardware I/O is stopped, so nothing is captured and no microphone indicator shows, while the next
-/// `start` skips the cold start of creating and initializing the unit. Bluetooth microphones are the exception: an
-/// engine on them switches the headset to its low-quality call profile, so none is kept between dictations.
+/// One input-only unit is kept for the chosen device and only paused between dictations: it stays initialized but
+/// the hardware I/O is stopped, so nothing is captured and no microphone indicator shows, while the next `start`
+/// skips the cold start of creating and initializing the unit. The unit never opens the output device. Bluetooth
+/// microphones are the exception: capturing from them switches the headset to its low-quality call profile, so no
+/// unit is kept between dictations.
 @MainActor
 final class AudioRecorder: AudioRecording {
     /// Reasons recording cannot start.
@@ -17,12 +18,15 @@ final class AudioRecorder: AudioRecording {
         case microphoneDenied
         /// No converter exists from the microphone format to 16 kHz mono.
         case unsupportedFormat
+        /// No input device is available.
+        case noMicrophone
 
         /// Message shown to the user.
         var errorDescription: String? {
             switch self {
             case .microphoneDenied: String(localized: "Microphone access is denied.")
             case .unsupportedFormat: String(localized: "The microphone format is not supported.")
+            case .noMicrophone: String(localized: "No microphone is available.")
             }
         }
     }
@@ -30,10 +34,10 @@ final class AudioRecorder: AudioRecording {
     private let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32, sampleRate: Double(DatasetStore.sampleRate), channels: 1, interleaved: false)!
     private let buffer = SampleBuffer()
-    /// Engine kept between dictations, with the device it was made for.
-    private var current: (engine: AVAudioEngine, device: AudioDeviceID?)?
+    /// Unit kept between dictations, with the device it was made for.
+    private var current: (unit: InputUnit, device: AudioDeviceID?)?
     private var isRecording = false
-    /// Times the running engine was restarted after a configuration change during this dictation.
+    /// Times the running unit was restarted after a format change during this dictation.
     private var restarts = 0
     private let selectedUID: () -> String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Perroquet", category: "recorder")
@@ -42,35 +46,27 @@ final class AudioRecorder: AudioRecording {
     /// or the built-in microphone when the default is a Bluetooth headset.
     init(selectedUID: @escaping () -> String? = { nil }) {
         self.selectedUID = selectedUID
-        // The engine stops itself when its device changes format mid-recording, as a Bluetooth headset does when it
-        // switches to its call profile right after the engine starts. Notifications posted outside a recording,
-        // such as the one preparing posts, are ignored.
-        NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main
-        ) { [weak self] notification in
-            let engine = notification.object as? AVAudioEngine
-            MainActor.assumeIsolated { self?.configurationChanged(engine) }
-        }
     }
 
-    /// Prepares an engine for the target device when microphone access is granted, unless one is already kept for
-    /// it or it is a Bluetooth headset; call it at launch and whenever the chosen microphone changes.
+    /// Prepares a unit for the target device when microphone access is granted, unless one is already kept for it or
+    /// it is a Bluetooth headset; call it at launch and whenever the chosen microphone changes.
     func prepare() {
         guard !isRecording, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
             let device = targetDevice(), current?.device != device
         else { return }
-        guard !InputDevices.isBluetooth(device) else {
-            current = nil
-            return
-        }
+        current?.unit.dispose()
+        current = nil
+        guard !InputDevices.isBluetooth(device) else { return }
         let clock = ContinuousClock()
         let begin = clock.now
-        let engine = makeEngine(device: device)
-        engine.prepare()
-        // No `AVAudioEngineConfigurationChange` observer: preparing posts one itself, and re-preparing on it
-        // loops. `start` instead reuses this engine only while the target device is unchanged.
-        current = (engine, device)
-        logger.notice("Prepared audio engine in \(Self.milliseconds(begin.duration(to: clock.now))) ms")
+        do {
+            let unit = try makeUnit(device: device)
+            _ = try unit.configure()
+            current = (unit, device)
+            logger.notice("Prepared audio unit in \(Self.milliseconds(begin.duration(to: clock.now))) ms")
+        } catch {
+            logger.error("Could not prepare audio unit: \(error.localizedDescription)")
+        }
     }
 
     /// Starts capturing, asking for microphone access when needed.
@@ -81,40 +77,27 @@ final class AudioRecorder: AudioRecording {
         let clock = ContinuousClock()
         let begin = clock.now
         let device = targetDevice()
-        let kept = current.flatMap { $0.device == device ? $0.engine : nil }
+        let previous = current
         current = nil
-        var engine = kept ?? makeEngine(device: device)
-        var attempt = 1
-        // A Bluetooth headset can switch to its call profile, at a lower sample rate, while the engine starts, which
-        // then fails with a format error. A fresh engine made right away reads the new format; waiting would let
-        // the headset fall back to its music profile.
-        while true {
-            do {
-                try startCapture(on: engine)
-                break
-            } catch where attempt < Self.startAttempts {
-                logger.notice("Start attempt \(attempt) failed (\(error.localizedDescription)), retrying")
-                attempt += 1
-                engine = makeEngine(device: device)
-            }
-        }
-        current = (engine, device)
+        let kept = previous.flatMap { $0.device == device ? $0.unit : nil }
+        if kept == nil { previous?.unit.dispose() }
+        let (unit, attempts) = try startUnit(device: device, kept: kept)
+        current = (unit, device)
         restarts = 0
         isRecording = true
         logger.notice(
-            "Started recording in \(Self.milliseconds(begin.duration(to: clock.now))) ms (kept engine: \(kept != nil), attempts: \(attempt))")
+            "Started recording in \(Self.milliseconds(begin.duration(to: clock.now))) ms (kept unit: \(kept != nil), attempts: \(attempts))")
     }
 
-    /// Stops capturing and returns the samples recorded since `start`. The engine is paused rather than stopped,
+    /// Stops capturing and returns the samples recorded since `start`. The unit is paused rather than released,
     /// so it stays prepared for the next `start`, except on a Bluetooth headset, which it releases.
     func stop() -> [Float] {
-        if isRecording, let (engine, device) = current {
-            engine.inputNode.removeTap(onBus: 0)
+        if isRecording, let (unit, device) = current {
             if let device, InputDevices.isBluetooth(device) {
-                engine.stop()
+                unit.dispose()
                 current = nil
             } else {
-                engine.pause()
+                unit.pause()
             }
         }
         isRecording = false
@@ -133,22 +116,23 @@ final class AudioRecorder: AudioRecording {
             "Captured \(Double(samples.count) / rate) s, peak \(peak), first sound at \(firstSound) s, restarts \(self.restarts)")
     }
 
-    /// Restarts the recording engine with a tap in the device's current format after a configuration change. Always:
-    /// the notification can arrive while the engine still runs at the old format, and a Bluetooth headset then
-    /// stops delivering audio about two seconds later.
-    private func configurationChanged(_ changed: AVAudioEngine?) {
-        guard isRecording, let engine = current?.engine, changed === engine else { return }
-        let hardware = engine.inputNode.inputFormat(forBus: 0)
-        guard restarts < Self.maxRestarts else {
-            logger.error("Engine configuration keeps changing; capture stopped")
-            return
+    /// Restarts the recording unit in the device's current format after a format change notification. On every
+    /// notification: it can arrive before the unit's cached format updates, and a Bluetooth headset then stops
+    /// delivering audio about two seconds later. Only restarts that find a different format count toward the cap.
+    private func formatChanged(_ changed: InputUnit) {
+        guard isRecording, let unit = current?.unit, changed === unit else { return }
+        if unit.needsConfigure {
+            guard restarts < Self.maxRestarts else {
+                unit.pause()
+                logger.error("Audio format keeps changing; capture stopped")
+                return
+            }
+            restarts += 1
         }
-        restarts += 1
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        unit.pause()
         do {
-            try startCapture(on: engine)
-            logger.notice("Restarted recording after a configuration change (\(hardware.sampleRate) Hz)")
+            let format = try startCapture(on: unit)
+            logger.notice("Restarted recording after a format change (\(format.sampleRate) Hz)")
         } catch {
             logger.error("Could not restart recording: \(error.localizedDescription)")
         }
@@ -159,52 +143,80 @@ final class AudioRecorder: AudioRecording {
         selectedUID().flatMap(InputDevices.deviceID(forUID:)) ?? InputDevices.preferredDefaultInputID()
     }
 
-    private func makeEngine(device: AudioDeviceID?) -> AVAudioEngine {
-        let engine = AVAudioEngine()
-        if var device, let unit = engine.inputNode.audioUnit {
-            AudioUnitSetProperty(
-                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &device,
-                UInt32(MemoryLayout<AudioDeviceID>.size))
+    private func makeUnit(device: AudioDeviceID?) throws -> InputUnit {
+        let unit: InputUnit
+        do {
+            unit = try InputUnit(device: device)
+        } catch let failure as InputUnit.Failure {
+            throw Self.recorderError(for: failure)
         }
-        return engine
+        unit.onFormatChange = { [weak self, weak unit] in
+            guard let unit else { return }
+            self?.formatChanged(unit)
+        }
+        return unit
     }
 
     private static let startAttempts = 3
     private static let maxRestarts = 3
 
-    /// Taps the input node and starts the engine, leaving the engine stopped and untapped when it throws.
-    private func startCapture(on engine: AVAudioEngine) throws {
-        let input = engine.inputNode
-        // The device's own format, not the node's output format, which can be stale after the device has changed
-        // its sample rate: a tap whose rate differs from the device's makes `installTap` raise an Objective-C
-        // exception that crashes the app.
-        let inputFormat = input.inputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
-            let converter = AVAudioConverter(from: inputFormat, to: targetFormat)
-        else { throw RecorderError.unsupportedFormat }
-        input.installTap(
-            onBus: 0, bufferSize: 4096, format: inputFormat,
-            block: Self.makeTap(converter: converter, input: inputFormat, target: targetFormat, buffer: buffer))
-        do {
-            try engine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            engine.stop()
-            throw error
+    /// Starts the kept unit, or a fresh one, retrying on a fresh unit; returns the running unit and attempts used.
+    /// A Bluetooth headset can switch to its call profile, at a lower sample rate, while the unit starts, which then
+    /// fails with a format error. A fresh unit made right away reads the new format; waiting would let the headset
+    /// fall back to its music profile.
+    private func startUnit(device: AudioDeviceID?, kept: InputUnit?) throws -> (unit: InputUnit, attempts: Int) {
+        var candidate = kept
+        var attempt = 1
+        while true {
+            do {
+                let unit = try candidate ?? makeUnit(device: device)
+                candidate = unit
+                try startCapture(on: unit)
+                return (unit, attempt)
+            } catch {
+                candidate?.dispose()
+                candidate = nil
+                guard attempt < Self.startAttempts else { throw error }
+                logger.notice("Start attempt \(attempt) failed (\(error.localizedDescription)), retrying")
+                attempt += 1
+            }
         }
+    }
+
+    /// Configures the unit for the device's current format and starts it, leaving it paused when it throws.
+    @discardableResult
+    private func startCapture(on unit: InputUnit) throws -> AVAudioFormat {
+        let configuration: InputUnit.Configuration
+        do {
+            configuration = try unit.configure()
+        } catch let failure as InputUnit.Failure {
+            throw Self.recorderError(for: failure)
+        }
+        let inputFormat = configuration.format
+        guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
+            throw RecorderError.unsupportedFormat
+        }
+        let ratio = targetFormat.sampleRate / inputFormat.sampleRate
+        let capacity = AVAudioFrameCount((Double(configuration.maxFrames) * ratio).rounded(.up)) + 64
+        guard let out = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else {
+            throw RecorderError.unsupportedFormat
+        }
+        try unit.start(handler: Self.makeHandler(converter: converter, out: out, buffer: buffer))
+        return inputFormat
+    }
+
+    private static func recorderError(for failure: InputUnit.Failure) -> RecorderError {
+        failure == .noInputDevice ? .noMicrophone : .unsupportedFormat
     }
 
     private static func milliseconds(_ duration: Duration) -> Int {
         Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
     }
 
-    private nonisolated static func makeTap(
-        converter: AVAudioConverter, input: AVAudioFormat, target: AVAudioFormat, buffer: SampleBuffer
-    ) -> AVAudioNodeTapBlock {
-        { pcm, _ in
-            let ratio = target.sampleRate / input.sampleRate
-            let capacity = AVAudioFrameCount(Double(pcm.frameLength) * ratio) + 64
-            guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
+    private nonisolated static func makeHandler(
+        converter: AVAudioConverter, out: AVAudioPCMBuffer, buffer: SampleBuffer
+    ) -> (AVAudioPCMBuffer) -> Void {
+        { pcm in
             var supplied = false
             var error: NSError?
             converter.convert(to: out, error: &error) { _, status in
@@ -233,9 +245,14 @@ final class AudioRecorder: AudioRecording {
 /// Thread-safe sample accumulator filled from the audio thread.
 private final class SampleBuffer: Sendable {
     private let samples = Mutex<[Float]>([])
+    /// About a minute of audio, so appending from the audio thread rarely reallocates.
+    private static let reservedSamples = DatasetStore.sampleRate * 60
 
     func reset() {
-        samples.withLock { $0.removeAll(keepingCapacity: true) }
+        samples.withLock {
+            $0.removeAll(keepingCapacity: true)
+            $0.reserveCapacity(Self.reservedSamples)
+        }
     }
 
     func append(_ chunk: UnsafeBufferPointer<Float>) {

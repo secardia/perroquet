@@ -60,6 +60,15 @@ enum InputDevices {
         return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
     }
 
+    /// Frames the device delivers per I/O cycle, or nil when it does not say.
+    static func bufferFrameSize(_ id: AudioDeviceID) -> UInt32? {
+        var addr = address(kAudioDevicePropertyBufferFrameSize)
+        var frames: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, &frames) == noErr else { return nil }
+        return frames
+    }
+
     private static func transportType(_ id: AudioDeviceID) -> UInt32? {
         var addr = address(kAudioDevicePropertyTransportType)
         var transport: UInt32 = 0
