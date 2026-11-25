@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -111,6 +112,12 @@ final class DictationController {
         lastText = store.latestText() ?? ""
         mode = defaults.string(forKey: Self.modeDefaultsKey).flatMap(RecordingMode.init) ?? .tap
         saveRecordings = defaults.object(forKey: Self.saveRecordingsDefaultsKey) as? Bool ?? true
+    }
+
+    /// Puts the last dictation on the general pasteboard.
+    func copyLastText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lastText, forType: .string)
     }
 
     /// Shortcut pressed.

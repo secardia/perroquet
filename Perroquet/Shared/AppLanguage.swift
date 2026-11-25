@@ -53,14 +53,12 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Opens a new instance of the app, then quits this one.
+    /// Opens a new instance of the app, then quits this one. Throws when the new instance cannot be opened.
     @MainActor
-    static func relaunch() {
+    static func relaunch() async throws {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
-            guard error == nil else { return }
-            Task { @MainActor in NSApp.terminate(nil) }
-        }
+        try await NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration)
+        NSApp.terminate(nil)
     }
 }

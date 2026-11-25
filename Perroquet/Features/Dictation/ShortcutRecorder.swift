@@ -45,13 +45,14 @@ struct ShortcutRecorder: View {
     @State private var frame = CGRect.zero
 
     var body: some View {
-        LabeledContent(title) {
+        HStack {
+            Text(title)
+            Spacer()
             Button(action: toggle) {
-                Text(isCapturing ? LocalizedStringKey("Press keys…") : shortcut.map { LocalizedStringKey($0.description) } ?? LocalizedStringKey("None"))
+                label
                     .frame(minWidth: 110)
             }
-            .buttonStyle(.bordered)
-            .tint(isCapturing ? .accentColor : nil)
+            .buttonStyle(.appNeutral)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         }
         .onAppear { shortcut = KeyboardShortcuts.getShortcut(for: name) }
@@ -62,6 +63,16 @@ struct ShortcutRecorder: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             stop()
             removeReleaseMonitor()
+        }
+    }
+
+    @ViewBuilder private var label: some View {
+        if isCapturing {
+            Text("Press keys…")
+        } else if let shortcut {
+            Text(verbatim: shortcut.description)
+        } else {
+            Text("None")
         }
     }
 

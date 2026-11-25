@@ -80,9 +80,14 @@ struct DatasetStore: Sendable {
             .sorted { $0.id < $1.id }
     }
 
-    /// Lists the recordings of one status folder, sorted by id.
-    func list(in status: RecordingStatus) -> [DatasetRecording] {
-        recordings(in: status).sorted { $0.id < $1.id }
+    /// Ids of one status folder, newest first, from the folder listing alone: no recording is opened or statted.
+    func ids(in status: RecordingStatus) -> [String] {
+        folders(in: status).map(\.lastPathComponent).sorted(by: >)
+    }
+
+    /// The recording `id` of a status folder, nil when its audio file is missing.
+    func recording(id: String, status: RecordingStatus) -> DatasetRecording? {
+        recording(at: folderURL(id: id, status: status), status: status)
     }
 
     /// The recording with the greatest id, found from the folder listings without reading any recording.

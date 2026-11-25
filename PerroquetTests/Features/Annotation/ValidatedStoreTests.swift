@@ -25,8 +25,8 @@ final class ValidatedStoreTests: XCTestCase {
         try dataset.validate(id: id, text: text)
     }
 
-    private func loadedStore() async -> ValidatedStore {
-        let store = ValidatedStore(dataset: dataset)
+    private func loadedStore(pageSize: Int = RecordingPage.defaultSize) async -> ValidatedStore {
+        let store = ValidatedStore(dataset: dataset, pageSize: pageSize)
         await store.reload()
         return store
     }
@@ -56,10 +56,10 @@ final class ValidatedStoreTests: XCTestCase {
     func testRowTextIsReadLazilyAndCached() async throws {
         try addValidated("a", text: "hello")
         let store = await loadedStore()
-        XCTAssertTrue(store.texts.isEmpty)
+        XCTAssertTrue(store.rows.texts.isEmpty)
         let recording = try XCTUnwrap(store.recordings.first)
-        await store.loadText(for: recording)
-        XCTAssertEqual(store.texts["a"], "hello")
+        await store.rows.load(recording)
+        XCTAssertEqual(store.rows.texts["a"], "hello")
     }
 
     func testSelectChangesTextAndRequestsAutoplay() async throws {
@@ -80,9 +80,9 @@ final class ValidatedStoreTests: XCTestCase {
         let store = await loadedStore()
         try store.save("fixed")
         XCTAssertEqual(store.selectedID, "a")
-        XCTAssertEqual(store.texts["b"], "fixed")
+        XCTAssertEqual(store.rows.texts["b"], "fixed")
         XCTAssertEqual(store.validatedCount, 2)
-        let saved = try XCTUnwrap(dataset.list(in: .validated).first { $0.id == "b" })
+        let saved = try XCTUnwrap(dataset.recording(id: "b", status: .validated))
         XCTAssertEqual(saved.readTranscription(), "fixed")
     }
 
@@ -102,7 +102,7 @@ final class ValidatedStoreTests: XCTestCase {
         store.select("b")
         try store.delete()
         XCTAssertEqual(store.selectedID, "a")
-        XCTAssertEqual(dataset.list(in: .validated).map(\.id), ["a", "c"])
+        XCTAssertEqual(dataset.ids(in: .validated), ["c", "a"])
         try store.delete()
         XCTAssertEqual(store.selectedID, "c")
         try store.delete()
@@ -117,5 +117,26 @@ final class ValidatedStoreTests: XCTestCase {
         await store.reload()
         XCTAssertEqual(store.recordings.map(\.id), ["b", "a"])
         XCTAssertEqual(store.selectedID, "a")
+    }
+
+    func testFirstPageCountAndLoadMore() async throws {
+        for index in 0..<5 { try addValidated("r\(index)") }
+        let store = await loadedStore(pageSize: 2)
+        XCTAssertEqual(store.recordings.map(\.id), ["r4", "r3"])
+        XCTAssertEqual(store.validatedCount, 5)
+        store.loadMore()
+        XCTAssertEqual(store.recordings.map(\.id), ["r4", "r3", "r2", "r1"])
+        XCTAssertTrue(store.hasMore)
+    }
+
+    func testDeleteCrossesThePageBoundary() async throws {
+        for index in 0..<4 { try addValidated("r\(index)") }
+        let store = await loadedStore(pageSize: 2)
+        XCTAssertEqual(store.recordings.count, 2)
+        store.select("r2")
+        try store.delete()
+        XCTAssertEqual(store.selectedID, "r1")
+        XCTAssertEqual(store.recordings.count, 3)
+        XCTAssertEqual(store.validatedCount, 3)
     }
 }

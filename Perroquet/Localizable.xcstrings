@@ -21,16 +21,6 @@
         }
       }
     },
-    "%lld to review": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld à relire"
-          }
-        }
-      }
-    },
     "Accessibility": {
       "localizations": {
         "fr": {
@@ -181,6 +171,16 @@
         }
       }
     },
+    "Couldn't relaunch %@. Quit it and open it again.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de relancer %@. Quittez l’app puis rouvrez-la."
+          }
+        }
+      }
+    },
     "Data": {
       "localizations": {
         "fr": {
@@ -311,6 +311,16 @@
         }
       }
     },
+    "Keeps your dictations on this Mac so you can annotate them for fine-tuning.": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserve vos dictées sur ce Mac pour que vous puissiez les annoter en vue du fine-tuning."
+          }
+        }
+      }
+    },
     "Language": {
       "localizations": {
         "fr": {
@@ -347,6 +357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Permet à %@ de coller le texte transcrit dans l’app où vous écrivez."
+          }
+        }
+      }
+    },
+    "Listening": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À l’écoute"
           }
         }
       }
@@ -401,16 +421,6 @@
         }
       }
     },
-    "Newer": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus récente"
-          }
-        }
-      }
-    },
     "No validated dictations": {
       "localizations": {
         "fr": {
@@ -437,26 +447,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Non autorisé"
-          }
-        }
-      }
-    },
-    "Not set": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non défini"
-          }
-        }
-      }
-    },
-    "Older": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus ancienne"
           }
         }
       }
@@ -551,12 +541,12 @@
         }
       }
     },
-    "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere. Dictations are kept on this Mac for review unless \"Save recordings\" is off.": {
+    "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistre votre voix pendant la dictée. L’audio est transcrit sur ce Mac et n’est jamais envoyé ailleurs. Les dictées sont conservées sur ce Mac pour être relues, sauf si « Enregistrer les dictées » est désactivé."
+            "value": "Enregistre votre voix pendant la dictée. L’audio est transcrit sur ce Mac et n’est jamais envoyé ailleurs."
           }
         }
       }
@@ -591,16 +581,6 @@
         }
       }
     },
-    "Shortcut": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Raccourci"
-          }
-        }
-      }
-    },
     "Shortcuts": {
       "localizations": {
         "fr": {
@@ -617,16 +597,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vitesse"
-          }
-        }
-      }
-    },
-    "State": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "État"
           }
         }
       }

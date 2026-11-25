@@ -22,19 +22,23 @@ struct RecordingEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             playerRow
             TextEditor(text: $text)
-                .font(.title3)
+                .font(.system(size: 15))
+                .foregroundStyle(AppColors.textPrimary)
                 .lineSpacing(4)
                 .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: ControlCorners.card, style: .continuous)
+                        .fill(AppColors.card))
                 .focused($editorFocused)
             if let message = actionError ?? player.errorMessage {
-                Text(message).foregroundStyle(.red)
+                Text(message).foregroundStyle(AppColors.error)
             }
             bottomBar
         }
-        .padding()
+        .padding(.horizontal, 20)
+        .padding(.bottom, 14)
         .task(id: recording.id) { await arrive() }
         .onChange(of: rate) { player.setRate(rate) }
         .onDisappear { player.stop() }
@@ -45,7 +49,15 @@ struct RecordingEditor: View {
             Button(action: player.togglePlayPause) {
                 Label(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill")
                     .labelStyle(.iconOnly)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous)
+                            .fill(AppColors.accentMuted))
+                    .contentShape(RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous))
             }
+            .buttonStyle(.plain)
             .keyboardShortcut(.space, modifiers: .control)
             .help(player.isPlaying ? "Pause (⌃Space)" : "Play (⌃Space)")
             WaveformView(
@@ -54,11 +66,17 @@ struct RecordingEditor: View {
             ) { fraction in
                 player.seek(to: fraction * player.duration)
             }
-            Text(verbatim: "\(Self.format(player.currentTime)) / \(Self.format(player.duration))")
+            Text(verbatim: "\(player.currentTime.clockText) / \(player.duration.clockText)")
+                .font(.system(size: 12))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColors.textSecondary)
             speedMenu
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: ControlCorners.card, style: .continuous)
+                .fill(AppColors.card))
     }
 
     private var speedMenu: some View {
@@ -70,20 +88,37 @@ struct RecordingEditor: View {
             Divider()
             Toggle("Autoplay", isOn: $autoplay)
         } label: {
-            Text("\(Self.format(rate: rate))×").monospacedDigit()
+            Text("\(Self.format(rate: rate))×")
+                .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(AppColors.text)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous)
+                        .fill(AppColors.button))
         }
-        .menuStyle(.button)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .fixedSize()
     }
 
     private var bottomBar: some View {
-        HStack {
-            Button("Delete") { perform(onDelete) }
+        HStack(spacing: 8) {
             Spacer()
-            Button("Validate") { perform(onValidate) }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: .command)
-                .help("Validate (⌘↩)")
+            Button("Delete") { perform(onDelete) }
+                .buttonStyle(.appNeutral)
+            Button {
+                perform(onValidate)
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Validate")
+                    Text(verbatim: "⌘↩").foregroundStyle(AppColors.accent.opacity(0.6))
+                }
+            }
+            .buttonStyle(.appPrimary)
+            .keyboardShortcut(.return, modifiers: .command)
+            .help("Validate (⌘↩)")
         }
     }
 
@@ -107,9 +142,5 @@ struct RecordingEditor: View {
 
     private static func format(rate: Double) -> String {
         rate.formatted(.number.precision(.fractionLength(0...2)))
-    }
-
-    private static func format(_ seconds: TimeInterval) -> String {
-        Duration.seconds(seconds.rounded(.down)).formatted(.time(pattern: .minuteSecond))
     }
 }

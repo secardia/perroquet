@@ -1,57 +1,85 @@
 import AppKit
-import KeyboardShortcuts
 import SwiftUI
 
-/// General page: model state, launch and language settings, last dictation and permissions.
+/// General page: status, launch and language settings, last dictation and permissions.
 struct GeneralSettingsView: View {
     @Environment(DictationController.self) private var controller
     @Environment(Transcriber.self) private var transcriber
     @Environment(Permissions.self) private var permissions
     @Environment(LaunchAtLogin.self) private var launchAtLogin
     @State private var language = AppLanguage.atLaunch
+    @State private var relaunchFailed = false
 
     var body: some View {
         @Bindable var controller = controller
-        Form {
-            Section("Dictation") {
-                LabeledContent("State") { Text(transcriber.state.summary) }
-                LabeledContent("Shortcut") {
-                    Text(KeyboardShortcuts.getShortcut(for: .toggleDictation)?.description ?? String(localized: "Not set"))
+        PageScaffold(title: "General") {
+            statusPill
+        } content: {
+            Card("Dictation") {
+                CardRow {
+                    Toggle(
+                        "Launch at login",
+                        isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) }))
                 }
-                Toggle(
-                    "Launch at login",
-                    isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) }))
                 if let message = launchAtLogin.errorMessage {
-                    Text(message).foregroundStyle(.red)
+                    CardRow { Text(message).foregroundStyle(AppColors.error) }
                 }
-                Toggle("Save recordings", isOn: $controller.saveRecordings)
-                Picker("Language", selection: $language) {
-                    ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                CardRow {
+                    Toggle(isOn: $controller.saveRecordings) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Save recordings")
+                            Text("Keeps your dictations on this Mac so you can annotate them for fine-tuning.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                    }
                 }
-                .onChange(of: language) { language.store() }
+                CardRow {
+                    HStack {
+                        Text("Language")
+                        Spacer()
+                        Picker("Language", selection: $language) {
+                            ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .onChange(of: language) { language.store() }
+                    }
+                }
                 if language != AppLanguage.atLaunch {
-                    LabeledContent {
-                        Button("Relaunch", action: AppLanguage.relaunch)
-                    } label: {
-                        Text("Takes effect the next time \(Bundle.main.appName) opens")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    CardRow {
+                        HStack {
+                            Text("Takes effect the next time \(Bundle.main.appName) opens")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppColors.textSecondary)
+                            Spacer()
+                            Button("Relaunch", action: relaunch).buttonStyle(.appNeutral)
+                        }
+                    }
+                    if relaunchFailed {
+                        CardRow {
+                            Text("Couldn't relaunch \(Bundle.main.appName). Quit it and open it again.")
+                                .foregroundStyle(AppColors.error)
+                        }
                     }
                 }
             }
             if !controller.lastText.isEmpty {
-                Section("Last dictation") {
-                    LabeledContent {
-                        Button("Copy", action: copyLastText)
-                    } label: {
-                        Text(controller.lastText).textSelection(.enabled)
+                Card("Last dictation") {
+                    CardRow {
+                        HStack {
+                            Text(controller.lastText)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("Copy", action: controller.copyLastText).buttonStyle(.appNeutral)
+                        }
                     }
                 }
             }
-            Section("Permissions") {
+            Card("Permissions") {
                 PermissionRow(
                     title: "Microphone",
-                    detail: "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere. Dictations are kept on this Mac for review unless \"Save recordings\" is off.",
+                    detail: "Records your voice while you dictate. The audio is transcribed on this Mac and never sent anywhere.",
                     granted: permissions.microphone == .authorized
                 ) {
                     permissions.beginGrant()
@@ -70,11 +98,11 @@ struct GeneralSettingsView: View {
                     permissions.grantAccessibility()
                 }
                 if controller.recordingError == nil, let message = controller.problem {
-                    Text(message).foregroundStyle(.red)
+                    CardRow { Text(message).foregroundStyle(AppColors.error) }
                 }
             }
         }
-        .formStyle(.grouped)
+        .toggleStyle(.app)
         .onAppear { launchAtLogin.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             launchAtLogin.refresh()
@@ -87,8 +115,21 @@ struct GeneralSettingsView: View {
         }
     }
 
-    private func copyLastText() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(controller.lastText, forType: .string)
+    private func relaunch() {
+        Task {
+            do {
+                try await AppLanguage.relaunch()
+            } catch {
+                relaunchFailed = true
+            }
+        }
+    }
+
+    @ViewBuilder private var statusPill: some View {
+        if controller.state == .recording {
+            StatusPill("Listening", tone: .active)
+        } else {
+            StatusPill(verbatim: transcriber.state.summary, tone: transcriber.isReady ? .active : .neutral)
+        }
     }
 }

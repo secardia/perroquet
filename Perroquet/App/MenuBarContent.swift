@@ -15,7 +15,7 @@ struct MenuBarContent: View {
         Text(controller.problem ?? transcriber.state.summary)
         Divider()
         if !controller.lastText.isEmpty {
-            Button(action: copyLastText) {
+            Button(action: controller.copyLastText) {
                 Text("Copy last dictation")
                 Text(Self.preview(of: controller.lastText))
             }
@@ -27,11 +27,6 @@ struct MenuBarContent: View {
         Divider()
         Button("Quit \(Bundle.main.appName)") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
-    }
-
-    private func copyLastText() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(controller.lastText, forType: .string)
     }
 
     /// Start of `text` on a single line, cut with an ellipsis.

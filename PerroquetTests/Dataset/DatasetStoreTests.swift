@@ -129,8 +129,8 @@ final class DatasetStoreTests: XCTestCase {
         let validated = try store.validate(id: recording.id, text: "fixed")
         try store.saveText(id: recording.id, text: "fixed again")
         XCTAssertEqual(validated.readTranscription(), "fixed again")
-        XCTAssertEqual(store.list(in: .validated).map(\.id), [recording.id])
-        XCTAssertTrue(store.list(in: .pending).isEmpty)
+        XCTAssertEqual(store.ids(in: .validated), [recording.id])
+        XCTAssertTrue(store.ids(in: .pending).isEmpty)
     }
 
     func testDeleteRemovesTheRecordingFolder() throws {

@@ -6,27 +6,40 @@ struct ShortcutSettingsView: View {
     @Environment(DictationController.self) private var controller
 
     var body: some View {
-        @Bindable var controller = controller
-        Form {
-            Section {
-                ShortcutRecorder(
-                    title: "Dictation shortcut",
-                    name: .toggleDictation,
-                    conflictsWith: .cancelDictation,
-                    allowsBareKeys: false,
-                    onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
-                ShortcutRecorder(
-                    title: "Cancel shortcut",
-                    name: .cancelDictation,
-                    conflictsWith: .toggleDictation,
-                    allowsBareKeys: true,
-                    onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
-                Picker("Mode", selection: $controller.mode) {
-                    ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
+        PageScaffold(title: "Shortcuts") {
+            Card {
+                CardRow {
+                    ShortcutRecorder(
+                        title: "Dictation shortcut",
+                        name: .toggleDictation,
+                        conflictsWith: .cancelDictation,
+                        allowsBareKeys: false,
+                        onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
                 }
-                .pickerStyle(.segmented)
+                CardRow {
+                    ShortcutRecorder(
+                        title: "Cancel shortcut",
+                        name: .cancelDictation,
+                        conflictsWith: .toggleDictation,
+                        allowsBareKeys: true,
+                        onCapturing: { DictationHotkey.setCapturing($0, controllerState: controller.state) })
+                }
+                CardRow {
+                    HStack {
+                        Text("Mode")
+                        Spacer()
+                        SegmentedGroup {
+                            ForEach(RecordingMode.allCases) { mode in
+                                SegmentedCell(isSelected: controller.mode == mode) {
+                                    controller.mode = mode
+                                } label: {
+                                    Text(mode.title)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-        .formStyle(.grouped)
     }
 }

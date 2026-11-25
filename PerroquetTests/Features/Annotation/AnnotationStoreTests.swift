@@ -1,6 +1,10 @@
 import XCTest
 @testable import Perroquet
 
+private final class Gate: @unchecked Sendable {
+    var isBlocking = false
+}
+
 @MainActor
 final class AnnotationStoreTests: XCTestCase {
     private var root: URL!
@@ -26,42 +30,46 @@ final class AnnotationStoreTests: XCTestCase {
             id: id)
     }
 
-    private func store() -> AnnotationStore { AnnotationStore(dataset: dataset) }
+    private func store(pageSize: Int = RecordingPage.defaultSize) async -> AnnotationStore {
+        let session = AnnotationStore(dataset: dataset, pageSize: pageSize)
+        await session.reload()
+        return session
+    }
 
-    func testOpensOnNewestPendingOnly() throws {
+    func testOpensOnNewestPendingOnly() async throws {
         try add("a")
         try add("b")
         try add("c")
         try dataset.validate(id: "c", text: "done")
-        let session = store()
+        let session = await store()
         XCTAssertEqual(session.recordings.map(\.id), ["b", "a"])
         XCTAssertEqual(session.current?.id, "b")
         XCTAssertEqual(session.pendingCount, 2)
     }
 
-    func testOpensWithVerbatimText() throws {
+    func testOpensWithVerbatimText() async throws {
         try add("a")
         try add("b", text: "hello\n")
         try dataset.validate(id: "a", text: "done")
-        let session = store()
+        let session = await store()
         XCTAssertEqual(session.current?.id, "b")
         XCTAssertEqual(session.currentText, "hello\n")
         XCTAssertEqual(session.recordings.count, 1)
     }
 
-    func testPendingCountDropsAfterValidation() throws {
+    func testPendingCountDropsAfterValidation() async throws {
         try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         XCTAssertEqual(session.pendingCount, 2)
         try session.save("fixed")
         XCTAssertEqual(session.pendingCount, 1)
     }
 
-    func testSaveValidatesAndAdvancesToNextOlderPending() throws {
+    func testSaveValidatesAndAdvancesToNextOlderPending() async throws {
         try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         try session.save("fixed b")
         XCTAssertEqual(session.current?.id, "a")
         let first = try XCTUnwrap(dataset.list().first { $0.id == "b" })
@@ -69,13 +77,12 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(first.readTranscription(), "fixed b")
     }
 
-    func testSaveOnOldestWrapsToNewestThenEnds() throws {
+    func testSaveOnOldestWrapsToNewestThenEnds() async throws {
         try add("a")
         try add("b")
         try add("c")
-        let session = store()
-        session.next()
-        session.next()
+        let session = await store()
+        session.select("a")
         XCTAssertEqual(session.current?.id, "a")
         try session.save("A")
         XCTAssertEqual(session.current?.id, "c")
@@ -84,46 +91,38 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertNil(session.current)
     }
 
-    func testValidatedRecordingNeverComesBack() throws {
+    func testValidatedRecordingNeverComesBack() async throws {
         try add("c")
         try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         try session.save("C")
         XCTAssertEqual(session.current?.id, "b")
-        session.previous()
-        XCTAssertEqual(session.current?.id, "b")
-        session.next()
-        session.next()
+        session.select("a")
         XCTAssertEqual(session.current?.id, "a")
         XCTAssertEqual(session.recordings.map(\.id), ["b", "a"])
     }
 
-    func testNextAndPreviousMoveWithoutSaving() throws {
+    func testSelectMovesWithoutSaving() async throws {
         try add("c", text: "tc")
         try add("b", text: "tb")
         try add("a", text: "ta")
-        let session = store()
-        session.next()
+        let session = await store()
+        session.select("b")
         XCTAssertEqual(session.current?.id, "b")
         XCTAssertEqual(session.currentText, "tb")
-        session.next()
+        session.select("a")
         XCTAssertEqual(session.current?.id, "a")
-        session.next()
-        XCTAssertEqual(session.current?.id, "a")
-        session.previous()
-        session.previous()
-        XCTAssertEqual(session.current?.id, "c")
-        session.previous()
+        session.select("c")
         XCTAssertEqual(session.current?.id, "c")
         XCTAssertEqual(session.pendingCount, 3)
         XCTAssertTrue(dataset.list().allSatisfy { $0.status == .pending })
     }
 
-    func testDeleteRemovesFromDiskAndAdvances() throws {
+    func testDeleteRemovesFromDiskAndAdvances() async throws {
         let first = try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         try session.delete()
         XCTAssertEqual(session.current?.id, "a")
         XCTAssertEqual(session.recordings.map(\.id), ["a"])
@@ -131,22 +130,20 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: first.folder.path))
     }
 
-    func testAllReviewedLeavesNothingCurrent() throws {
+    func testAllReviewedLeavesNothingCurrent() async throws {
         try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         try session.save("x")
         try session.delete()
         XCTAssertNil(session.current)
         XCTAssertEqual(session.pendingCount, 0)
-        session.previous()
-        session.next()
         XCTAssertNil(session.current)
     }
 
     func testReloadPicksUpNewPendingAfterAllDone() async throws {
         try add("a")
-        let session = store()
+        let session = await store()
         try session.save("A")
         XCTAssertNil(session.current)
         try add("b")
@@ -157,7 +154,7 @@ final class AnnotationStoreTests: XCTestCase {
 
     func testReloadJumpsToNewestWhenNewDictationArrives() async throws {
         try add("a")
-        let session = store()
+        let session = await store()
         try add("b")
         try add("c")
         await session.reload()
@@ -168,7 +165,7 @@ final class AnnotationStoreTests: XCTestCase {
     func testReloadWithoutNewRecordingKeepsCurrent() async throws {
         try add("a")
         try add("b")
-        let session = store()
+        let session = await store()
         XCTAssertEqual(session.current?.id, "b")
         try dataset.validate(id: "a", text: "done")
         await session.reload()
@@ -180,7 +177,7 @@ final class AnnotationStoreTests: XCTestCase {
         try add("a")
         try add("b")
         try add("c")
-        let session = store()
+        let session = await store()
         try session.save("C")
         XCTAssertEqual(session.current?.id, "b")
         try dataset.validate(id: "a", text: "done")
@@ -188,10 +185,10 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.current?.id, "b")
     }
 
-    func testStoreErrorLeavesPositionUnchanged() throws {
+    func testStoreErrorLeavesPositionUnchanged() async throws {
         let first = try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         let clash = root.appending(path: "Validated_Recordings/b", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: clash, withIntermediateDirectories: true)
         XCTAssertThrowsError(try session.save("x"))
@@ -206,7 +203,7 @@ final class AnnotationStoreTests: XCTestCase {
         try add("c")
         try add("b")
         try add("a")
-        let session = store()
+        let session = await store()
         XCTAssertFalse(session.takeAutoplayRequest())
         await session.reload()
         XCTAssertFalse(session.takeAutoplayRequest())
@@ -218,18 +215,17 @@ final class AnnotationStoreTests: XCTestCase {
         try session.delete()
         XCTAssertTrue(session.takeAutoplayRequest())
 
-        session.next()
+        session.select("a")
         XCTAssertTrue(session.takeAutoplayRequest())
 
-        session.previous()
+        session.select("b")
         XCTAssertTrue(session.takeAutoplayRequest())
     }
 
-    func testNoAutoplayWhenPositionDoesNotChange() throws {
+    func testNoAutoplayWhenPositionDoesNotChange() async throws {
         try add("a")
-        let session = store()
-        session.previous()
-        session.next()
+        let session = await store()
+        session.select("a")
         XCTAssertFalse(session.takeAutoplayRequest())
         try session.save("A")
         XCTAssertNil(session.current)
@@ -238,7 +234,7 @@ final class AnnotationStoreTests: XCTestCase {
 
     func testNoAutoplayWhenReloadOpensNewPending() async throws {
         try add("a")
-        let session = store()
+        let session = await store()
         try session.save("A")
         _ = session.takeAutoplayRequest()
         try add("b")
@@ -247,16 +243,15 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertFalse(session.takeAutoplayRequest())
     }
 
-    func testTextStaysCorrectAfterSaveDeleteNavigation() throws {
+    func testTextStaysCorrectAfterSaveDeleteNavigation() async throws {
         try add("c", text: "tc")
         try add("b", text: "tb")
         try add("a", text: "ta")
-        let session = store()
+        let session = await store()
         try session.save("C fixed")
         XCTAssertEqual(session.currentText, "tb")
         try session.delete()
         XCTAssertEqual(session.currentText, "ta")
-        session.previous()
         XCTAssertNil(session.recordings.first { $0.id == "c" })
         XCTAssertEqual(session.current?.id, "a")
     }
@@ -266,12 +261,16 @@ final class AnnotationStoreTests: XCTestCase {
         try add("b")
         let entered = AsyncStream<Void>.makeStream()
         let release = AsyncStream<Void>.makeStream()
+        let gate = Gate()
         let session = AnnotationStore(dataset: dataset) { dataset in
-            let snapshot = dataset.list().reversed().filter { $0.status == .pending }
+            let snapshot = dataset.ids(in: .pending)
+            guard gate.isBlocking else { return snapshot }
             entered.continuation.yield()
             for await _ in release.stream { break }
             return snapshot
         }
+        await session.reload()
+        gate.isBlocking = true
         try add("c")
         let reloading = Task { await session.reload() }
         for await _ in entered.stream { break }
@@ -282,12 +281,62 @@ final class AnnotationStoreTests: XCTestCase {
         XCTAssertNotEqual(session.current?.id, "b")
     }
 
-    func testEmptyDataset() {
-        let session = store()
+    func testEmptyDataset() async {
+        let session = await store()
         XCTAssertNil(session.current)
-        session.previous()
-        session.next()
         XCTAssertNil(session.current)
         XCTAssertEqual(session.pendingCount, 0)
+    }
+
+    func testSelectGoesToThatPendingRecordingAndRequestsAutoplay() async throws {
+        try add("a", text: "ta")
+        try add("b", text: "tb")
+        let session = await store()
+        XCTAssertEqual(session.current?.id, "b")
+        session.select("a")
+        XCTAssertEqual(session.current?.id, "a")
+        XCTAssertEqual(session.currentText, "ta")
+        XCTAssertTrue(session.takeAutoplayRequest())
+        session.select("a")
+        XCTAssertFalse(session.takeAutoplayRequest())
+        session.select("unknown")
+        XCTAssertEqual(session.current?.id, "a")
+    }
+
+    func testFirstPageIsLoadedAndCountComesFromTheFolderListing() async throws {
+        for index in 0..<7 { try add("r\(index)") }
+        let session = await store(pageSize: 3)
+        XCTAssertEqual(session.recordings.map(\.id), ["r6", "r5", "r4"])
+        XCTAssertEqual(session.pendingCount, 7)
+        XCTAssertTrue(session.hasMore)
+    }
+
+    func testLoadMoreAppendsTheNextPage() async throws {
+        for index in 0..<7 { try add("r\(index)") }
+        let session = await store(pageSize: 3)
+        session.loadMore()
+        XCTAssertEqual(session.recordings.map(\.id), ["r6", "r5", "r4", "r3", "r2", "r1"])
+        session.loadMore()
+        XCTAssertEqual(session.recordings.count, 7)
+        XCTAssertFalse(session.hasMore)
+    }
+
+    func testSaveOnTheLastLoadedRowAdvancesIntoTheNextPage() async throws {
+        for index in 0..<4 { try add("r\(index)") }
+        let session = await store(pageSize: 2)
+        session.select("r2")
+        try session.save("done")
+        XCTAssertEqual(session.current?.id, "r1")
+        XCTAssertEqual(session.pendingCount, 3)
+    }
+
+    func testFolderWithoutAudioIsSkippedWhenItsPageLoads() async throws {
+        for index in 0..<4 { try add("r\(index)") }
+        let broken = dataset.root.appending(path: "Pending_Recordings/r2")
+        try FileManager.default.removeItem(at: broken.appending(path: "audio.wav"))
+        let session = await store(pageSize: 2)
+        XCTAssertEqual(session.pendingCount, 4)
+        session.loadMore()
+        XCTAssertEqual(session.recordings.map(\.id), ["r3", "r1", "r0"])
     }
 }

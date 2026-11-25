@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// A permission row styled like a two-line `LabeledContent`, but with the status centered on both lines
-/// (`LabeledContent` aligns its value with the title only).
+/// A permission row: title and detail on the left, status (and the grant button) on the right.
 struct PermissionRow: View {
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
@@ -9,17 +8,19 @@ struct PermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if granted {
-                Text("Granted").foregroundStyle(.secondary)
-            } else {
-                Text("Not granted").foregroundStyle(.secondary)
-                Button("Grant…", action: action)
+        CardRow {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(AppColors.textPrimary)
+                    Text(detail).font(.system(size: 12)).foregroundStyle(AppColors.textSecondary)
+                }
+                Spacer()
+                if granted {
+                    Text("Granted").foregroundStyle(AppColors.textSecondary)
+                } else {
+                    Text("Not granted").foregroundStyle(AppColors.textSecondary)
+                    Button("Grant…", action: action).buttonStyle(.appPrimary)
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bars of a waveform with the played part in the accent color; click or drag to seek.
+/// Bars of a waveform with the played part in the accent green; click or drag to seek.
 struct WaveformView: View {
     /// Peaks in 0…1; nil while computing.
     let peaks: [Float]?
@@ -27,7 +27,7 @@ struct WaveformView: View {
                     let played = (Double(index) + 0.5) / Double(values.count) <= shown
                     context.fill(
                         Path(roundedRect: rect, cornerRadius: Self.barWidth / 2),
-                        with: .style(played ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary)))
+                        with: .color(played ? AppColors.accent : AppColors.textTertiary.opacity(0.55)))
                 }
             }
             .contentShape(Rectangle())
