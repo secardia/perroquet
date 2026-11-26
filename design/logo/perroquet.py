@@ -41,9 +41,9 @@ BLUE, GREEN, YELLOW, WHITE = "#2F80ED", "#3DD17A", "#FFC83D", "#FFFFFF"
 
 # The parrot is drawn in its own coordinates, then scaled and centred on the 1024 canvas.
 # MOTIF_CENTRE is the centre of the bounding box of every layer (crest, head, beaks):
-# x 141-728, y 95-710. MOTIF_SCALE makes it about 870 px tall, filling most of the icon.
+# x 141-728, y 95-710. MOTIF_SCALE makes it about 780 px tall, a little more than Tomate (750 px).
 MOTIF_CENTRE = (434.5, 402.5)
-MOTIF_SCALE = 1.42
+MOTIF_SCALE = 1.27
 HEAD_CENTRE, HEAD_RADIUS = (360, 500), 210
 EYE_CENTRE = (432, 440)
 
