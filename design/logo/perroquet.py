@@ -40,33 +40,46 @@ ICTOOL = "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Conten
 BLUE, GREEN, YELLOW, WHITE = "#2F80ED", "#3DD17A", "#FFC83D", "#FFFFFF"
 
 # The parrot is drawn in its own coordinates, then scaled and centred on the 1024 canvas.
-# MOTIF_CENTRE is the centre of the bounding box of every layer (crest, head, beaks).
-MOTIF_CENTRE = (419, 432)
-MOTIF_SCALE = 1.4
-EYE_CENTRE = (465, 448)
+# MOTIF_CENTRE is the centre of the bounding box of every layer (crest, head, beaks):
+# x 141-728, y 95-710. MOTIF_SCALE makes it about 870 px tall, filling most of the icon.
+MOTIF_CENTRE = (434.5, 402.5)
+MOTIF_SCALE = 1.42
+HEAD_CENTRE, HEAD_RADIUS = (360, 500), 210
+EYE_CENTRE = (432, 440)
 
-# Crest: one feather repeated three times. The tips sit on one arc (centred on
-# CREST_PIVOT, through the yellow tip), CREST_STEP degrees apart; each feather leans back
-# by CREST_LEAN of that angle, so the visible overlaps are about equal (132 vs 165 px).
-FEATHER = "M320 355 C305 250, 365 150, 450 155 C410 222.5, 400 300, 415 350 Z"
-FEATHER_TIP = (450, 155)
-CREST_PIVOT = (401, 399)
-CREST_STEP = -27  # degrees along the arc between two tips
-CREST_LEAN = 0.55
+# Short upper beak whose tip hooks down over the lower one: the hook is what tells a
+# parrot from a crow, whose beak is long and straight. It starts inside the head, so no
+# corner of background shows between the head and the top of the beak. The lower beak
+# fills the inside of the hook up to its tip (a gap there is too small to read), and its
+# underside arches up between the head and the tip, so the hook points down clearly.
+UPPER_BEAK = (
+    "M509 379 C582 308, 731 356, 728 474 C726 555, 689 618, 624 650 "
+    "C656 589, 647 528, 551 512 Z"
+)
+LOWER_BEAK = (
+    "M512 498 C610 490, 672 560, 662 610 C658 632, 640 648, 624 652 "
+    "C612 628, 596 612, 576 612 C552 612, 528 632, 498 652 Z"
+)
+
+# Crest of a cockatoo: one long thin feather (base at the origin, tip curling forward),
+# repeated three times. The bases sit on a circle inside the head, CREST_STEP degrees apart
+# going backwards from the top, and each feather leans back by that same angle.
+FEATHER = "M0 0 C-4 -14, 0 -30, 14 -36 C8 -26, 8 -14, 10 0 Z"
+FEATHER_SCALE = 5.95
+CREST_ROOT_RADIUS = 184
+CREST_START = -86  # degrees, the front feather, nearly straight up
+CREST_STEP = 22
 
 
 def crest() -> str:
     """Return the three overlapping crest feathers, back to front."""
-    px, py = CREST_PIVOT
-    tx, ty = FEATHER_TIP
-    radius = math.dist(CREST_PIVOT, FEATHER_TIP)
-    start = math.degrees(math.atan2(ty - py, tx - px))
+    hx, hy = HEAD_CENTRE
     paths = []
     for i, colour in enumerate((YELLOW, GREEN, BLUE)):  # back to front
-        angle = start + i * CREST_STEP
-        x = px + radius * math.cos(math.radians(angle))
-        y = py + radius * math.sin(math.radians(angle))
-        transform = f"translate({x:.2f} {y:.2f}) rotate({CREST_LEAN * i * CREST_STEP:.2f}) translate({-tx} {-ty})"
+        angle = math.radians(CREST_START - i * CREST_STEP)
+        x = hx + CREST_ROOT_RADIUS * math.cos(angle)
+        y = hy + CREST_ROOT_RADIUS * math.sin(angle)
+        transform = f"translate({x:.2f} {y:.2f}) rotate({-i * CREST_STEP}) scale({FEATHER_SCALE})"
         paths.append(f'<path d="{FEATHER}" fill="{colour}" transform="{transform}"/>')
     return "".join(paths)
 
@@ -86,12 +99,9 @@ def eye() -> str:
 # Layer name -> SVG fragment in motif coordinates.
 LAYERS = {
     "eye": eye(),
-    "head": '<circle cx="360" cy="500" r="210" fill="#E83A45"/>',
-    "upper-beak": (
-        '<path d="M465 375 C630 335, 730 420, 720 545 C716 590, 684 600, 676 565 '
-        'C664 515, 630 495, 480 500 Z" fill="#FBC24A"/>'
-    ),
-    "lower-beak": '<path d="M480 560 C610 560, 660 590, 660 640 C620 672, 560 668, 480 645 Z" fill="#E08A12"/>',
+    "head": f'<circle cx="{HEAD_CENTRE[0]}" cy="{HEAD_CENTRE[1]}" r="{HEAD_RADIUS}" fill="#E83A45"/>',
+    "upper-beak": f'<path d="{UPPER_BEAK}" fill="#FBC24A"/>',
+    "lower-beak": f'<path d="{LOWER_BEAK}" fill="#E08A12"/>',
     "crest": crest(),
 }
 
@@ -174,10 +184,10 @@ def build_icon() -> None:
     (ICON / "icon.json").write_text(json.dumps(document, indent=2) + "\n")
 
 
-# Eye hole of the menu bar glyph, smaller than the app icon's eye so it stays light at 17pt.
-MENU_BAR_EYE_RADIUS = 46
+# Eye of the menu bar glyph: a plain round hole.
+MENU_BAR_EYE_RADIUS = 52
 # Bounding box of the head, beaks and crest in motif coordinates: x, y, width, height.
-MENU_BAR_BOX = (117, 150, 604, 560)
+MENU_BAR_BOX = (139, 93, 591, 619)
 MENU_BAR_HEIGHT_PT = 17
 
 
@@ -187,7 +197,8 @@ def black(fragment: str) -> str:
 
 
 def build_menu_bar_icon() -> None:
-    """Write the menu bar template: one black silhouette with the eye as a hole, cropped to the motif."""
+    """Write the menu bar template: one black silhouette cropped to the motif, with the eye
+    punched out."""
     x, y, w, h = MENU_BAR_BOX
     eye_x, eye_y = EYE_CENTRE
     eye_hole = (
