@@ -1,0 +1,9 @@
+{"run": "coreml-ane-6bit", "exit": 0, "baseline_mb": 7697, "system_peak_delta_mb": 732, "system_p90_delta_mb": 710, "after_exit_delta_mb": 66}
+{"run": "coreml-ane-8bit", "exit": 0, "baseline_mb": 7664, "system_peak_delta_mb": 833, "system_p90_delta_mb": 809, "after_exit_delta_mb": 33}
+{"run": "coreml-ane-encgpu", "exit": 0, "baseline_mb": 7674, "system_peak_delta_mb": 2246, "system_p90_delta_mb": 2029, "after_exit_delta_mb": 260}
+{"run": "coreml-cpu", "exit": 0, "baseline_mb": 7943, "system_peak_delta_mb": 473, "system_p90_delta_mb": 427, "after_exit_delta_mb": 30}
+{"run": "ggml-q8-metal", "exit": 0, "baseline_mb": 7892, "system_peak_delta_mb": 2596, "system_p90_delta_mb": 2590, "after_exit_delta_mb": -58}
+{"run": "mlx-gpu-q8", "exit": 0, "baseline_mb": 7966, "system_peak_delta_mb": 3527, "system_p90_delta_mb": 2063, "after_exit_delta_mb": -32}
+{"run": "mlx-gpu-q6", "exit": 0, "baseline_mb": 7934, "system_peak_delta_mb": 3435, "system_p90_delta_mb": 2141, "after_exit_delta_mb": 44}
+{"run": "onnx-int8-cpu-t4", "exit": 0, "baseline_mb": 7975, "system_peak_delta_mb": 3649, "system_p90_delta_mb": 3586, "after_exit_delta_mb": -536}
+{"run": "sherpa-int8-cpu-t4", "exit": 0, "baseline_mb": 7439, "system_peak_delta_mb": 4243, "system_p90_delta_mb": 3855, "after_exit_delta_mb": -195}

@@ -6,6 +6,5 @@ build/
 tmp/
 data/
 .whackagent/
-bench/
 .build/
 .swiftpm/

@@ -1,0 +1,12 @@
+models/
+.hf/
+.venv*/
+.build/
+results/raw/
+results/logs/
+manifest*.json
+fluidaudio-src/
+nemo-speech-cpp/
+nemo-speech-bin/
+data/
+.claude/
