@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// Column of recordings (newest first) with one selected: date and length, then one line of text.

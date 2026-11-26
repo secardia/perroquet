@@ -1,0 +1,209 @@
+import Foundation
+
+/// Reads and writes the on-disk fine-tuning dataset.
+///
+/// Layout: `<root>/{Pending,Validated}_Recordings/<id>/` holding
+/// `audio.flac` (raw, 16 kHz mono 16-bit), `transcription_raw.txt`, `transcription.txt`, `infos.json`,
+/// and `speech_spans.json` (where the speech is, to skip the silences while listening) when detection succeeded.
+/// Older folders may hold `audio.wav` instead; both are read.
+public struct DatasetStore: Sendable {
+    /// Errors raised by dataset operations.
+    enum StoreError: Error, Equatable {
+        /// No readable recording with this id exists in any folder.
+        case recordingNotFound(String)
+        /// A recording with the same id already exists at the destination.
+        case destinationExists(URL)
+    }
+
+    /// Sample rate of stored audio, in Hz.
+    static let sampleRate = 16_000
+
+    /// Dataset root folder.
+    let root: URL
+    private var fileManager: FileManager { .default }
+
+    /// Default location: `~/Library/Application Support/<app name>/FineTuningDataset`.
+    static var defaultRoot: URL {
+        root(forApp: Bundle.main.appName)
+    }
+
+    /// Dataset root for the app with this display name, so dev and prod never share data.
+    static func root(forApp name: String) -> URL {
+        URL.applicationSupportDirectory
+            .appending(path: name, directoryHint: .isDirectory)
+            .appending(path: "FineTuningDataset", directoryHint: .isDirectory)
+    }
+
+    /// Creates a store on the app's default root.
+    public init() {
+        self.init(root: Self.defaultRoot)
+    }
+
+    /// Creates a store on the given root; folders are created on demand.
+    init(root: URL) {
+        self.root = root
+    }
+
+    /// Stores a new pending recording and returns it.
+    ///
+    /// Files are written to a hidden temporary folder renamed at the end, so a failure never
+    /// leaves a half-written recording behind.
+    @discardableResult
+    func addPending(
+        samples: [Float],
+        speechSpans: SpeechSpans? = nil,
+        transcription: TranscriptionRecord,
+        date: Date = Date(),
+        id: String? = nil
+    ) throws -> DatasetRecording {
+        let id = id ?? RecordingID.make(date: date)
+        let folder = folderURL(id: id, status: .pending)
+        let temp = folder.deletingLastPathComponent().appending(path: ".\(id).writing", directoryHint: .isDirectory)
+        guard !fileManager.fileExists(atPath: folder.path) else { throw StoreError.destinationExists(folder) }
+        try? fileManager.removeItem(at: temp)
+        try fileManager.createDirectory(at: temp, withIntermediateDirectories: true)
+        do {
+            try FLACEncoder.write(
+                samples: samples, sampleRate: Self.sampleRate, to: temp.appending(path: "audio.flac"))
+            if let speechSpans { try writeJSON(speechSpans, to: temp.appending(path: SpeechSpans.fileName)) }
+            try write(transcription.text, to: temp.appending(path: "transcription_raw.txt"))
+            try write(transcription.text, to: temp.appending(path: "transcription.txt"))
+            try writeJSON(RecordingInfos(transcription, date: date), to: temp.appending(path: "infos.json"))
+            try fileManager.moveItem(at: temp, to: folder)
+        } catch {
+            try? fileManager.removeItem(at: temp)
+            throw error
+        }
+        return DatasetRecording(
+            id: id, status: .pending, folder: folder, audio: folder.appending(path: "audio.flac"))
+    }
+
+    /// Lists recordings of every status folder, sorted by id.
+    func list() -> [DatasetRecording] {
+        RecordingStatus.allCases
+            .flatMap { recordings(in: $0) }
+            .sorted { $0.id < $1.id }
+    }
+
+    /// Ids of one status folder, newest first, from the folder listing alone: no recording is opened or statted.
+    func ids(in status: RecordingStatus) -> [String] {
+        folders(in: status).map(\.lastPathComponent).sorted(by: >)
+    }
+
+    /// The recording `id` of a status folder, nil when its audio file is missing.
+    func recording(id: String, status: RecordingStatus) -> DatasetRecording? {
+        recording(at: folderURL(id: id, status: status), status: status)
+    }
+
+    /// The recording with the greatest id, found from the folder listings without reading any recording.
+    func latest() -> DatasetRecording? {
+        RecordingStatus.allCases
+            .flatMap { status in folders(in: status).map { (status, $0) } }
+            .sorted { $0.1.lastPathComponent > $1.1.lastPathComponent }
+            .lazy
+            .compactMap { recording(at: $0.1, status: $0.0) }
+            .first
+    }
+
+    /// Modification dates of the status folders; changes whenever a recording is added, moved or removed.
+    func signature() -> [Date?] {
+        RecordingStatus.allCases.map {
+            let url = root.appending(path: $0.folderName, directoryHint: .isDirectory)
+            return try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        }
+    }
+
+    /// Writes `text` as the current transcription and moves the recording to Validated.
+    @discardableResult
+    func validate(id: String, text: String) throws -> DatasetRecording {
+        let moved = try move(try locate(id: id), to: .validated)
+        try write(text, to: moved.folder.appending(path: "transcription.txt"))
+        return moved
+    }
+
+    /// Rewrites the transcription of a recording without changing its status.
+    func saveText(id: String, text: String) throws {
+        try write(text, to: try locate(id: id).folder.appending(path: "transcription.txt"))
+    }
+
+    /// Deletes the recording folder (audio, texts, infos) for good.
+    func delete(id: String) throws {
+        try fileManager.removeItem(at: try locate(id: id).folder)
+    }
+
+    private func folderURL(id: String, status: RecordingStatus) -> URL {
+        root.appending(path: status.folderName, directoryHint: .isDirectory)
+            .appending(path: id, directoryHint: .isDirectory)
+    }
+
+    private func folders(in status: RecordingStatus) -> [URL] {
+        let directory = root.appending(path: status.folderName, directoryHint: .isDirectory)
+        return (try? fileManager.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.isDirectoryKey],
+            options: .skipsHiddenFiles)) ?? []
+    }
+
+    private func recordings(in status: RecordingStatus) -> [DatasetRecording] {
+        folders(in: status).compactMap { recording(at: $0, status: status) }
+    }
+
+    private func recording(at folder: URL, status: RecordingStatus) -> DatasetRecording? {
+        guard let audio = ["audio.wav", "audio.flac"]
+            .map({ folder.appending(path: $0) })
+            .first(where: { fileManager.fileExists(atPath: $0.path) })
+        else { return nil }
+        return DatasetRecording(
+            id: folder.lastPathComponent, status: status, folder: folder, audio: audio)
+    }
+
+    private func locate(id: String) throws -> DatasetRecording {
+        for status in RecordingStatus.allCases {
+            let folder = folderURL(id: id, status: status)
+            if let found = recording(at: folder, status: status) { return found }
+        }
+        throw StoreError.recordingNotFound(id)
+    }
+
+    private func move(_ source: DatasetRecording, to status: RecordingStatus) throws -> DatasetRecording {
+        if source.status == status { return recording(at: source.folder, status: status) ?? source }
+        let destination = folderURL(id: source.id, status: status)
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            throw StoreError.destinationExists(destination)
+        }
+        try fileManager.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.moveItem(at: source.folder, to: destination)
+        guard let moved = recording(at: destination, status: status) else {
+            throw StoreError.recordingNotFound(source.id)
+        }
+        return moved
+    }
+
+    private func write(_ text: String, to url: URL) throws {
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func writeJSON(_ value: some Encodable, to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(value).write(to: url)
+    }
+}
+
+/// `infos.json` content.
+private struct RecordingInfos: Encodable {
+    let modelIdentifier: String
+    let duration: TimeInterval
+    /// Seconds since the Foundation reference date, as in Oriloq.
+    let createdAt: TimeInterval
+    /// How the audio was trimmed before transcription; absent when the model heard the whole audio.
+    let trim: String?
+
+    init(_ record: TranscriptionRecord, date: Date) {
+        modelIdentifier = record.modelIdentifier
+        trim = record.trim
+        duration = record.duration
+        createdAt = date.timeIntervalSinceReferenceDate
+    }
+}

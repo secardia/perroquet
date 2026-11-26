@@ -1,4 +1,5 @@
 import AppKit
+import PerroquetCore
 import SwiftUI
 
 /// Menu shown by the menu bar item: state line, copy of the last dictation, settings and quit.

@@ -1,4 +1,5 @@
 import Observation
+import PerroquetCore
 import ServiceManagement
 
 /// Registers the app to open at login, reflecting the real `SMAppService` state.

@@ -1,16 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "%@ (disconnected)": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (déconnecté)"
-          }
-        }
-      }
-    },
     "%@×": {
       "localizations": {
         "fr": {
@@ -27,16 +17,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Accessibilité"
-          }
-        }
-      }
-    },
-    "Accessibility access is required to paste. Enable %@ in System Settings.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’accès à l’accessibilité est nécessaire pour coller. Activez %@ dans Réglages Système."
           }
         }
       }
@@ -67,16 +47,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Raccourci d’annulation"
-          }
-        }
-      }
-    },
-    "Cannot open %@: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d’ouvrir %@ : %@"
           }
         }
       }
@@ -117,46 +87,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible d’activer le lancement à l’ouverture de session : %@"
-          }
-        }
-      }
-    },
-    "Could not load the model: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de charger le modèle : %@"
-          }
-        }
-      }
-    },
-    "Could not paste: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de coller : %@"
-          }
-        }
-      }
-    },
-    "Could not save the recording: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d’enregistrer la dictée : %@"
-          }
-        }
-      }
-    },
-    "Could not start recording: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de démarrer l’enregistrement : %@"
           }
         }
       }
@@ -221,32 +151,12 @@
         }
       }
     },
-    "Downloading… %lld%%": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Téléchargement… %lld %%"
-          }
-        }
-      }
-    },
     "English": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "English"
-          }
-        }
-      }
-    },
-    "Failed: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échec : %@"
           }
         }
       }
@@ -371,26 +281,6 @@
         }
       }
     },
-    "Loading the model…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chargement du modèle…"
-          }
-        }
-      }
-    },
-    "Loading…": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chargement…"
-          }
-        }
-      }
-    },
     "Microphone": {
       "localizations": {
         "fr": {
@@ -401,32 +291,12 @@
         }
       }
     },
-    "Microphone access is denied.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’accès au microphone est refusé."
-          }
-        }
-      }
-    },
     "Mode": {
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Mode"
-          }
-        }
-      }
-    },
-    "No microphone is available.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun micro n’est disponible."
           }
         }
       }
@@ -571,16 +441,6 @@
         }
       }
     },
-    "Ready": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prêt"
-          }
-        }
-      }
-    },
     "Recording switches a Bluetooth headset to call mode: lower sound quality, interrupted playback and a delay before your first words are heard. Prefer your Mac's microphone.": {
       "localizations": {
         "fr": {
@@ -651,16 +511,6 @@
         }
       }
     },
-    "System default": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Par défaut du système"
-          }
-        }
-      }
-    },
     "System default skips Bluetooth headsets and uses your Mac's microphone instead: recording would switch them to call mode, lowering sound quality and interrupting playback.": {
       "localizations": {
         "fr": {
@@ -691,26 +541,6 @@
         }
       }
     },
-    "The microphone format is not supported.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le format du microphone n’est pas pris en charge."
-          }
-        }
-      }
-    },
-    "The model is not ready yet.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le modèle n’est pas encore prêt."
-          }
-        }
-      }
-    },
     "To review": {
       "localizations": {
         "fr": {
@@ -727,16 +557,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcription en cours"
-          }
-        }
-      }
-    },
-    "Transcription failed: %@": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échec de la transcription : %@"
           }
         }
       }
@@ -767,16 +587,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Validés"
-          }
-        }
-      }
-    },
-    "Waiting": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En attente"
           }
         }
       }

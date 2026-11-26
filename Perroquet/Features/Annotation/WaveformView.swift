@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// Bars of a waveform with the played part in the accent red-orange and the silences dimmed; click or drag to seek.

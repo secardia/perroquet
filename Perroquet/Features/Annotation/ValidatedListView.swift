@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// "Validated" page: the validated dictations as a list, with the selected one open for correction.

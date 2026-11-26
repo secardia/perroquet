@@ -1,4 +1,5 @@
 import AppKit
+import PerroquetCore
 import SwiftUI
 
 /// Main window content: a sidebar of pages and the selected page.

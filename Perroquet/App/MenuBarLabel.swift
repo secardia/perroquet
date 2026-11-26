@@ -1,4 +1,5 @@
 import AppKit
+import PerroquetCore
 import SwiftUI
 
 /// Menu bar item label. Every icon is drawn on a canvas the size of the parrot, so the status item keeps
@@ -16,12 +17,10 @@ struct MenuBarLabel: View {
 
     private static func accessibilityLabel(for icon: MenuBarIcon) -> Text {
         switch icon {
-        case .parrot: Text(verbatim: Bundle.main.appName)
-        case .symbol("ellipsis"): Text("Transcribing")
-        case .symbol("xmark"): Text("Dictation cancelled")
-        case .symbol("exclamationmark.triangle"): Text("Problem")
-        case .symbol(let name):
-            fallbackLabel(for: name)
+        case .idle: Text(verbatim: Bundle.main.appName)
+        case .transcribing: Text("Transcribing")
+        case .cancelled: Text("Dictation cancelled")
+        case .problem: Text("Problem")
         }
     }
 
@@ -31,15 +30,12 @@ struct MenuBarLabel: View {
         return image
     }()
 
-    private static func fallbackLabel(for name: String) -> Text {
-        assertionFailure("No accessibility label for \(name)")
-        return Text(verbatim: Bundle.main.appName)
-    }
-
     private static func image(for icon: MenuBarIcon) -> NSImage {
         switch icon {
-        case .parrot: parrot
-        case .symbol(let name): centredSymbol(name)
+        case .idle: parrot
+        case .transcribing: centredSymbol("ellipsis")
+        case .cancelled: centredSymbol("xmark")
+        case .problem: centredSymbol("exclamationmark.triangle")
         }
     }
 

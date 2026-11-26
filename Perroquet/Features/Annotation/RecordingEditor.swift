@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// Player, text editor and actions for one recording: independent of how recordings are queued.

@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// Application entry point: a menu bar item plus a single main window.
@@ -22,7 +23,7 @@ struct PerroquetApp: App {
         let controller = DictationController(
             recorder: recorder,
             transcriber: transcriber,
-            paster: Paster.system(),
+            paster: Paster(),
             store: dataset,
             speechDetector: speechDetector)
         _transcriber = State(initialValue: transcriber)

@@ -1,3 +1,4 @@
+import PerroquetCore
 import SwiftUI
 
 /// "To review" page: pending dictations one at a time, to correct and validate or delete.
