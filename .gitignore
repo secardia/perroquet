@@ -6,3 +6,4 @@ build/
 tmp/
 data/
 .whackagent/
+bench/
