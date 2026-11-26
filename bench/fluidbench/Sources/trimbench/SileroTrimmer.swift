@@ -1,4 +1,5 @@
 import FluidAudio
+import Trimming
 
 struct SileroConfig {
     let threshold: Float
@@ -18,6 +19,8 @@ struct SileroConfig {
     ].map { SileroConfig(threshold: Float($0.0), padding: $0.1, minSilence: $0.2) }
 
     static let all = grid + gentle
+    /// Also run with 0.5 s and 1 s of silence added before and after the spliced speech.
+    static let withEdgeSilence: Set<String> = ["silero-t0.5-pad1.0-sil1.0"]
 }
 
 struct SileroTrimmer {

@@ -1,15 +1,23 @@
 import Foundation
 
-struct Span {
-    var start: Double
-    var end: Double
+/// A time range of the audio, in seconds.
+public struct Span: Sendable {
+    public var start: Double
+    public var end: Double
+
+    public init(start: Double, end: Double) {
+        self.start = start
+        self.end = end
+    }
 }
 
-let sampleRate = 16_000
-let spliceGapSeconds = 0.15
+/// Sample rate of every audio handled here, in Hz.
+public let sampleRate = 16_000
+/// Silence put between two spliced spans, in seconds.
+public let spliceGapSeconds = 0.15
 
 /// Clamps spans to the audio, then merges overlapping or adjacent ones.
-func mergeSpans(_ spans: [Span], duration: Double) -> [Span] {
+public func mergeSpans(_ spans: [Span], duration: Double) -> [Span] {
     var merged: [Span] = []
     for s in spans.map({ Span(start: max(0, $0.start), end: min(duration, $0.end)) })
         .filter({ $0.end > $0.start }).sorted(by: { $0.start < $1.start })
@@ -25,7 +33,7 @@ func mergeSpans(_ spans: [Span], duration: Double) -> [Span] {
 }
 
 /// Concatenates the spans separated by 150 ms of zeros, without leading or trailing silence.
-func splice(_ samples: [Float], spans: [Span]) -> (audio: [Float], segments: Int, speechSeconds: Double) {
+public func splice(_ samples: [Float], spans: [Span]) -> (audio: [Float], segments: Int, speechSeconds: Double) {
     let duration = Double(samples.count) / Double(sampleRate)
     let merged = mergeSpans(spans, duration: duration)
     let gap = [Float](repeating: 0, count: Int(spliceGapSeconds * Double(sampleRate)))

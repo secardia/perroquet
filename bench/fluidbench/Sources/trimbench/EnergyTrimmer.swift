@@ -1,4 +1,5 @@
 import Foundation
+import Trimming
 
 struct EnergyConfig {
     let thresholdDB: Double

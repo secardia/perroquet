@@ -10,9 +10,17 @@ let package = Package(
             name: "fluidbench",
             dependencies: [.product(name: "FluidAudio", package: "fluidaudio-src")]
         ),
+        .target(
+            name: "Trimming",
+            dependencies: [.product(name: "FluidAudio", package: "fluidaudio-src")]
+        ),
         .executableTarget(
             name: "trimbench",
-            dependencies: [.product(name: "FluidAudio", package: "fluidaudio-src")]
+            dependencies: ["Trimming", .product(name: "FluidAudio", package: "fluidaudio-src")]
+        ),
+        .executableTarget(
+            name: "speechspans",
+            dependencies: ["Trimming", .product(name: "FluidAudio", package: "fluidaudio-src")]
         ),
         .executableTarget(
             name: "loadbench",

@@ -1,10 +1,14 @@
 // Speech-trimming bench: transcribes each file after several trimming methods, same ASR settings as the app.
-// Usage: trimbench <manifest.json> <outdir> [limit]
+// Usage: trimbench <manifest.json> <outdir> [limit] [--only variant,variant...]
+// --only transcribes just the named variants (into its own outdir, since progress is kept per outdir).
+// Each finished file is appended to <outdir>/progress.jsonl; a rerun with the same outdir skips those files, so a
+// crash only loses the file in progress. The per-variant JSON files are written once every file is done.
 // Build in release: the FluidAudio config asserts (padding <= minSpeechDuration) trap in debug builds.
 import AVFoundation
 import CoreML
 import FluidAudio
 import Foundation
+import Trimming
 
 struct Entry: Decodable {
     let id: String
@@ -19,7 +23,7 @@ struct Entry: Decodable {
     }
 }
 
-struct Row: Encodable {
+struct Row: Codable {
     let id: String
     let duration: Double
     let keptS: Double
@@ -28,7 +32,7 @@ struct Row: Encodable {
     let hyp: String
     let ref: String
     let annotatedOnRaw: Bool
-    let speechOnlyKept = true
+    var speechOnlyKept = true
     var vadTime: Double?
     var spliceTime: Double?
     var vadModelTime: Double?
@@ -42,6 +46,12 @@ struct Row: Encodable {
         case spliceTime = "splice_time"
         case vadModelTime = "vad_model_time"
     }
+}
+
+/// One line of progress.jsonl: every variant's row for one file.
+struct Progress: Codable {
+    let id: String
+    let rows: [String: Row]
 }
 
 struct BenchError: Error, CustomStringConvertible {
@@ -68,8 +78,21 @@ func seconds(_ d: Duration) -> Double {
 }
 
 func runBench() async throws {
-    let args = CommandLine.arguments
-    let usage = BenchError(description: "usage: trimbench <manifest.json> <outdir> [limit]")
+    var args = CommandLine.arguments
+    let usage = BenchError(description: "usage: trimbench <manifest.json> <outdir> [limit] [--only variant,...] [--language fr]")
+    var only: Set<String>?
+    if let i = args.firstIndex(of: "--only") {
+        guard i + 1 < args.count else { throw usage }
+        only = Set(args[i + 1].split(separator: ",").map(String.init))
+        args.removeSubrange(i...(i + 1))
+    }
+    // Language hint passed to the decoder (FluidAudio's script filter; for French it also blocks English function words).
+    var language: Language?
+    if let i = args.firstIndex(of: "--language") {
+        guard i + 1 < args.count, let l = Language(rawValue: args[i + 1]) else { throw usage }
+        language = l
+        args.removeSubrange(i...(i + 1))
+    }
     guard args.count >= 3, args.count <= 4 else { throw usage }
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
@@ -97,24 +120,49 @@ func runBench() async throws {
     let energy = EnergyTrimmer()
 
     let clock = ContinuousClock()
+    // The encoder rejects inputs under 0.5 s: a cut that keeps less is padded with trailing silence.
+    let minAsrSamples = sampleRate / 2
     func transcribe(_ audio: [Float]) async throws -> (String, Double) {
         guard !audio.isEmpty else { return ("", 0) }
         let t = clock.now
         var state = try TdtDecoderState()
-        let r = try await asr.transcribe(audio, decoderState: &state, language: nil)
+        let padded = audio + [Float](repeating: 0, count: max(0, minAsrSamples - audio.count))
+        let r = try await asr.transcribe(padded, decoderState: &state, language: language)
         return (r.text, seconds(t.duration(to: clock.now)))
     }
 
     guard !manifest.isEmpty else { throw BenchError(description: "\(args[1]): empty manifest") }
     _ = try await transcribe(try loadSamples(manifest[manifest.count / 2].path))
 
-    var rows: [String: [Row]] = [:]
+    let progressURL = outDir.appendingPathComponent("progress.jsonl")
+    var done: [String: [String: Row]] = [:]
+    if let text = try? String(contentsOf: progressURL, encoding: .utf8) {
+        // A line cut short by a crash does not decode and its file is redone.
+        for line in text.split(separator: "\n") {
+            if let p = try? JSONDecoder().decode(Progress.self, from: Data(line.utf8)) { done[p.id] = p.rows }
+        }
+    }
+    if !FileManager.default.fileExists(atPath: progressURL.path) {
+        FileManager.default.createFile(atPath: progressURL.path, contents: nil)
+    }
+    let progress = try FileHandle(forWritingTo: progressURL)
+    // Start on a fresh line after a line cut short by a crash.
+    if try progress.seekToEnd() > 0, (try? String(contentsOf: progressURL, encoding: .utf8))?.hasSuffix("\n") == false {
+        try progress.write(contentsOf: Data("\n".utf8))
+    }
+    // Keep the log in step with the work when stdout is redirected to a file.
+    setvbuf(stdout, nil, _IOLBF, 0)
+    print("resuming:", manifest.filter { done[$0.id] != nil }.count, "of", manifest.count, "files already done")
+
+    var rows: [String: Row] = [:]
     func record(_ variant: String, _ e: Entry, samples: [Float], spans: [Span]?, vadTime: Double?,
-                modelTime: Double? = nil) async throws {
+                modelTime: Double? = nil, silence: Double = 0) async throws {
+        if let only, !only.contains(variant) { return }
         let t0 = clock.now
         let spliced = spans.map { splice(samples, spans: $0) }
         let spliceTime = seconds(t0.duration(to: clock.now))
-        let audio = spliced?.audio ?? samples
+        let edge = [Float](repeating: 0, count: Int(silence * Double(sampleRate)))
+        let audio = edge + (spliced?.audio ?? samples) + edge
         let (hyp, time) = try await transcribe(audio)
         let fullSeconds = Double(samples.count) / Double(sampleRate)
         var row = Row(
@@ -126,12 +174,16 @@ func runBench() async throws {
             row.spliceTime = spliceTime
         }
         row.vadModelTime = modelTime
-        rows[variant, default: []].append(row)
+        rows[variant] = row
     }
 
-    for (n, e) in manifest.enumerated() {
+    for (n, e) in manifest.enumerated() where done[e.id] == nil {
+        rows = [:]
         let samples = try loadSamples(e.path)
         try await record("full", e, samples: samples, spans: nil, vadTime: nil)
+        for silence in [0.5, 1.0] {
+            try await record("full-sil\(silence)", e, samples: samples, spans: nil, vadTime: nil, silence: silence)
+        }
 
         var t = clock.now
         let probs = try await silero.probabilities(samples)
@@ -142,6 +194,11 @@ func runBench() async throws {
             let segTime = seconds(ts.duration(to: clock.now))
             try await record(c.name, e, samples: samples, spans: spans,
                              vadTime: sileroTime + segTime, modelTime: sileroTime)
+            guard SileroConfig.withEdgeSilence.contains(c.name) else { continue }
+            for silence in [0.5, 1.0] {
+                try await record("\(c.name)-edge\(silence)", e, samples: samples, spans: spans,
+                                 vadTime: sileroTime + segTime, modelTime: sileroTime, silence: silence)
+            }
         }
 
         t = clock.now
@@ -159,15 +216,22 @@ func runBench() async throws {
             let spans = energy.spans(energy.frameDB(samples), config: c)
             try await record(c.name, e, samples: samples, spans: spans, vadTime: seconds(t.duration(to: clock.now)))
         }
+        try progress.write(contentsOf: JSONEncoder().encode(Progress(id: e.id, rows: rows)) + Data("\n".utf8))
+        done[e.id] = rows
         print("[\(n + 1)/\(manifest.count)] \(e.id)")
     }
+    try progress.close()
 
+    var byVariant: [String: [Row]] = [:]
+    for e in manifest {
+        for (variant, row) in done[e.id] ?? [:] { byVariant[variant, default: []].append(row) }
+    }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted]
-    for (variant, r) in rows {
+    for (variant, r) in byVariant {
         try encoder.encode(r).write(to: outDir.appendingPathComponent("\(variant).json"))
     }
-    print("done", manifest.count, "files,", rows.count, "variants")
+    print("done", manifest.count, "files,", byVariant.count, "variants")
 }
 
 try await runBench()
