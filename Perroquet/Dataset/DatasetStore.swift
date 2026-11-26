@@ -3,7 +3,8 @@ import Foundation
 /// Reads and writes the on-disk fine-tuning dataset.
 ///
 /// Layout: `<root>/{Pending,Validated}_Recordings/<id>/` holding
-/// `audio.flac` (raw, 16 kHz mono 16-bit), `transcription_raw.txt`, `transcription.txt`, `infos.json`.
+/// `audio.flac` (raw, 16 kHz mono 16-bit), `transcription_raw.txt`, `transcription.txt`, `infos.json`,
+/// and `speech_spans.json` (where the speech is, to skip the silences while listening) when detection succeeded.
 /// Older folders may hold `audio.wav` instead; both are read.
 struct DatasetStore: Sendable {
     /// Errors raised by dataset operations.
@@ -45,6 +46,7 @@ struct DatasetStore: Sendable {
     @discardableResult
     func addPending(
         samples: [Float],
+        speechSpans: SpeechSpans? = nil,
         transcription: TranscriptionRecord,
         date: Date = Date(),
         id: String? = nil
@@ -58,6 +60,7 @@ struct DatasetStore: Sendable {
         do {
             try FLACEncoder.write(
                 samples: samples, sampleRate: Self.sampleRate, to: temp.appending(path: "audio.flac"))
+            if let speechSpans { try writeJSON(speechSpans, to: temp.appending(path: SpeechSpans.fileName)) }
             try write(transcription.text, to: temp.appending(path: "transcription_raw.txt"))
             try write(transcription.text, to: temp.appending(path: "transcription.txt"))
             try writeJSON(RecordingInfos(transcription, date: date), to: temp.appending(path: "infos.json"))
@@ -189,9 +192,12 @@ private struct RecordingInfos: Encodable {
     let duration: TimeInterval
     /// Seconds since the Foundation reference date, as in Oriloq.
     let createdAt: TimeInterval
+    /// How the audio was trimmed before transcription; absent when the model heard the whole audio.
+    let trim: String?
 
     init(_ record: TranscriptionRecord, date: Date) {
         modelIdentifier = record.modelIdentifier
+        trim = record.trim
         duration = record.duration
         createdAt = date.timeIntervalSinceReferenceDate
     }

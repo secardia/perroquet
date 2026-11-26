@@ -2,8 +2,8 @@ import Foundation
 
 extension DatasetStore: RecordingStore {
     /// Stores the dictation as a pending recording.
-    func save(samples: [Float], transcription: TranscriptionRecord) throws {
-        try addPending(samples: samples, transcription: transcription)
+    func save(samples: [Float], speechSpans: SpeechSpans?, transcription: TranscriptionRecord) throws {
+        try addPending(samples: samples, speechSpans: speechSpans, transcription: transcription)
     }
 
     /// Current transcription of the recording with the greatest id.

@@ -17,12 +17,14 @@ struct PerroquetApp: App {
         let transcriber = Transcriber()
         let microphone = MicrophoneSelection()
         let recorder = AudioRecorder(selectedUID: { microphone.selectedUID })
+        let speechDetector = SpeechDetector()
         microphone.onSelect = { Task { recorder.prepare() } }
         let controller = DictationController(
             recorder: recorder,
             transcriber: transcriber,
             paster: Paster.system(),
-            store: dataset)
+            store: dataset,
+            speechDetector: speechDetector)
         _transcriber = State(initialValue: transcriber)
         let permissions = Permissions()
         permissions.onGranted = {
@@ -41,6 +43,7 @@ struct PerroquetApp: App {
             // Deferred: a cold audio stack can take over a second, which must not hold up the launch.
             Task { recorder.prepare() }
             Task { await transcriber.load() }
+            Task { await speechDetector.load() }
         }
     }
 
@@ -66,7 +69,7 @@ struct PerroquetApp: App {
                 .environment(validated)
                 .environment(navigation)
         }
-        .defaultSize(width: 900, height: 600)
+        .defaultSize(width: 920, height: 600)
         .commands { SettingsCommand(navigation: navigation) }
     }
 }

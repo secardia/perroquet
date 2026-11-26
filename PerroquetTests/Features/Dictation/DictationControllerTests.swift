@@ -13,6 +13,9 @@ final class DictationControllerTests: XCTestCase {
         var events: [String] = []
         var pasted: [String] = []
         var saved: [TranscriptionRecord] = []
+        var speech = SpeechSpans(detected: [0..<1], duration: 1)
+        var savedSpeech: [SpeechSpans?] = []
+        var heard: [[Float]] = []
         var transcribeError: Error?
         var recordError: Error?
         var storeError: Error?
@@ -40,6 +43,7 @@ final class DictationControllerTests: XCTestCase {
             return fakes.failed
         }
         func transcribe(_ samples: [Float]) async throws -> TranscriptionRecord {
+            fakes.heard.append(samples)
             if fakes.holdTranscription {
                 await withCheckedContinuation { fakes.transcriptionGate = $0 }
             }
@@ -59,11 +63,17 @@ final class DictationControllerTests: XCTestCase {
 
     private struct Store: RecordingStore, @unchecked Sendable {
         let fakes: Fakes
-        func save(samples: [Float], transcription: TranscriptionRecord) throws {
+        func save(samples: [Float], speechSpans: SpeechSpans?, transcription: TranscriptionRecord) throws {
             if let error = fakes.storeError { throw error }
             fakes.saved.append(transcription)
+            fakes.savedSpeech.append(speechSpans)
         }
         func latestText() -> String? { fakes.latest }
+    }
+
+    private struct Detect: SpeechDetecting, @unchecked Sendable {
+        let fakes: Fakes
+        func speechSpans(_ samples: [Float]) async -> SpeechSpans? { fakes.speech }
     }
 
     private func make(
@@ -75,7 +85,7 @@ final class DictationControllerTests: XCTestCase {
         let defaults = defaults ?? makeDefaults()
         let controller = DictationController(
             recorder: Recorder(fakes: fakes), transcriber: Transcribe(fakes: fakes), paster: Paste(fakes: fakes),
-            store: Store(fakes: fakes), defaults: defaults,
+            store: Store(fakes: fakes), speechDetector: Detect(fakes: fakes), defaults: defaults,
             cancelledDuration: cancelledDuration)
         if let mode { controller.mode = mode }
         return (controller, fakes)
@@ -106,6 +116,48 @@ final class DictationControllerTests: XCTestCase {
         XCTAssertEqual(fakes.pasted, ["hello"])
         XCTAssertEqual(fakes.saved.map(\.text), ["hello"])
         XCTAssertEqual(controller.lastText, "hello")
+    }
+
+    func testSavesTheSpeechSpansWithTheRawAudio() async {
+        let (controller, fakes) = make(mode: .tap)
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(fakes.savedSpeech, [fakes.speech])
+    }
+
+    func testTranscribesOnlyTheSpeechAndStoresTheRawDuration() async {
+        let (controller, fakes) = make(mode: .tap)
+        let rate = DatasetStore.sampleRate
+        fakes.samples = (0..<6 * rate).map { Float($0) } as [Float]
+        fakes.speech = SpeechSpans(detected: [1..<1.5, 4.5..<5], duration: 6)
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(fakes.heard, [fakes.speech?.spliced(fakes.samples)])
+        XCTAssertEqual(fakes.heard.first?.count, 5 * rate + Int(SpeechSpans.spliceGap * Double(rate)))
+        XCTAssertEqual(fakes.saved.map(\.trim), [SpeechSpans.method])
+        XCTAssertEqual(fakes.saved.map(\.duration), [6])
+    }
+
+    func testTranscribesTheWholeAudioWhenNoSpeechIsFound() async {
+        let (controller, fakes) = make(mode: .tap)
+        fakes.speech = nil
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(fakes.heard, [fakes.samples])
+        XCTAssertEqual(fakes.saved.map(\.trim), [nil])
+    }
+
+    func testSavesTheRawAudioAloneWhenNoSpeechIsFound() async {
+        let (controller, fakes) = make(mode: .tap)
+        fakes.speech = nil
+        controller.hotkeyDown()
+        controller.hotkeyDown()
+        await settle(controller)
+        XCTAssertEqual(fakes.savedSpeech, [nil])
+        XCTAssertEqual(fakes.saved.map(\.text), ["hello"])
     }
 
     func testHoldStartsOnDownStopsOnUp() async {

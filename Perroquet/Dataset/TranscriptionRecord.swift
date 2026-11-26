@@ -8,4 +8,6 @@ struct TranscriptionRecord: Sendable {
     var duration: TimeInterval
     /// Identifier of the model that produced the text.
     var modelIdentifier: String
+    /// `SpeechSpans.method` when the model heard only the spliced speech; nil when it heard the whole audio.
+    var trim: String? = nil
 }

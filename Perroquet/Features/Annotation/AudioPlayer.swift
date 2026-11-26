@@ -11,8 +11,10 @@ final class AudioPlayer {
     private(set) var errorMessage: String?
     /// Length of the loaded recording in seconds; 0 until the file is read or when nothing is loaded.
     private(set) var duration: TimeInterval = 0
-    /// Position in seconds of audio (not wall time); refreshed about 15 times a second while playing.
+    /// Position in seconds of audio (not wall time); refreshed about 30 times a second while playing.
     private(set) var currentTime: TimeInterval = 0
+    /// When set, only the speech is played: playback jumps over each silence it reaches. Kept across `load`.
+    @ObservationIgnored var skippedSilences: SpeechSpans?
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -22,18 +24,21 @@ final class AudioPlayer {
     /// Stops the current playback, opens `url` and starts playing it when `autoplay` is true.
     func load(_ url: URL, autoplay: Bool) {
         stop()
-        let asset = AVURLAsset(url: url)
+        // Without precise timing, AVFoundation estimates FLAC positions from the bitrate: a seek to 33 s could
+        // start playing 0.8 s early, out of step with the waveform and the time shown.
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .timeDomain
         let next = AVPlayer(playerItem: item)
         next.defaultRate = rate
         player = next
         timeObserver = next.addPeriodicTimeObserver(
-            forInterval: CMTime(value: 1, timescale: 15), queue: .main
+            forInterval: CMTime(value: 1, timescale: 30), queue: .main
         ) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self, self.isPlaying else { return }
-                self.currentTime = min(max(time.seconds, 0), self.duration)
+                let now = min(max(time.seconds, 0), self.duration)
+                if !self.skipSilence(at: now) { self.currentTime = now }
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -74,6 +79,12 @@ final class AudioPlayer {
         currentTime = clamped
     }
 
+    /// Moves to `time` seconds of audio and plays from there, even when paused or finished.
+    func play(from time: TimeInterval) {
+        seek(to: time)
+        if !isPlaying { play() }
+    }
+
     /// Sets the speed (1 is normal) for the current and every later recording, applied immediately while playing.
     func setRate(_ value: Double) {
         rate = Float(value)
@@ -100,8 +111,24 @@ final class AudioPlayer {
     }
 
     private func play() {
+        skipSilence(at: currentTime)
         player?.play()
         isPlaying = player != nil
+    }
+
+    /// When silences are skipped and `time` falls in one, seeks to the next speech, or ends after the last one;
+    /// returns whether it moved.
+    @discardableResult
+    private func skipSilence(at time: TimeInterval) -> Bool {
+        guard let speech = skippedSilences else { return false }
+        guard let next = speech.playableTime(from: time) else {
+            player?.pause()
+            finished()
+            return true
+        }
+        guard next > time + SpeechSpans.skipTolerance else { return false }
+        seek(to: next)
+        return true
     }
 
     private func finished() {

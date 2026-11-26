@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// Bars of a waveform with the played part in the accent red-orange; click or drag to seek.
+/// Bars of a waveform with the played part in the accent red-orange and the silences dimmed; click or drag to seek.
 struct WaveformView: View {
     /// Peaks in 0…1; nil while computing.
     let peaks: [Float]?
     /// Playback position in 0…1.
     let progress: Double
-    /// Called with the fraction (0…1) chosen when a click or drag ends.
+    /// Silences as fractions (0…1) of the recording, dimmed and shaded.
+    var silences: [Range<Double>] = []
+    /// Called with the fraction (0…1) chosen when a click or drag ends; the editor plays from there.
     let onSeek: (Double) -> Void
 
     @State private var dragFraction: Double?
@@ -20,14 +22,22 @@ struct WaveformView: View {
                 let values = peaks ?? [Float](repeating: 0, count: Waveform.bucketCount)
                 let slot = size.width / CGFloat(values.count)
                 let shown = dragFraction ?? progress
+                for silence in silences {
+                    let rect = CGRect(
+                        x: silence.lowerBound * size.width, y: 0,
+                        width: (silence.upperBound - silence.lowerBound) * size.width, height: size.height)
+                    context.fill(Path(rect), with: .color(AppColors.textTertiary.opacity(0.12)))
+                }
                 for (index, value) in values.enumerated() {
                     let height = max(Self.minimumBarHeight, CGFloat(value) * size.height)
                     let x = slot * CGFloat(index) + (slot - Self.barWidth) / 2
                     let rect = CGRect(x: x, y: (size.height - height) / 2, width: Self.barWidth, height: height)
-                    let played = (Double(index) + 0.5) / Double(values.count) <= shown
+                    let center = (Double(index) + 0.5) / Double(values.count)
+                    let color = center <= shown ? AppColors.accent : AppColors.textTertiary.opacity(0.55)
+                    let silent = silences.contains { $0.contains(center) }
                     context.fill(
                         Path(roundedRect: rect, cornerRadius: Self.barWidth / 2),
-                        with: .color(played ? AppColors.accent : AppColors.textTertiary.opacity(0.55)))
+                        with: .color(silent ? color.opacity(0.35) : color))
                 }
             }
             .contentShape(Rectangle())

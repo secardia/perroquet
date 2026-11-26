@@ -11,12 +11,15 @@ struct RecordingEditor: View {
 
     @State private var player = AudioPlayer()
     @State private var peaks: [Float]?
+    @State private var speech: SpeechSpans?
     @State private var actionError: String?
-    @AppStorage("autoplay") private var autoplay = true
     @AppStorage("playbackRate") private var rate = 1.0
+    /// Whether playback skips the silences, when the recording's speech is known.
+    @AppStorage("skipsSilences") private var skipsSilences = true
     @FocusState private var editorFocused: Bool
 
-    private static let rates = [0.75, 1, 1.5, 2, 2.5, 3]
+    /// Speeds the speed button cycles through.
+    private static let rates = [1, 1.5, 2]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -41,36 +44,33 @@ struct RecordingEditor: View {
         .padding(.bottom, 14)
         .task(id: recording.id) { await arrive() }
         .onChange(of: rate) { player.setRate(rate) }
+        .onChange(of: skipsSilences) { player.skippedSilences = skipsSilences ? speech : nil }
         .onDisappear { player.stop() }
     }
 
+    /// Full-width waveform above the transport controls, so the shaded silences stay readable.
     private var playerRow: some View {
-        HStack(spacing: 12) {
-            Button(action: player.togglePlayPause) {
-                Label(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill")
-                    .labelStyle(.iconOnly)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppColors.accent)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous)
-                            .fill(AppColors.accentMuted))
-                    .contentShape(RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.space, modifiers: .control)
-            .help(player.isPlaying ? "Pause (⌃Space)" : "Play (⌃Space)")
+        VStack(spacing: 8) {
             WaveformView(
                 peaks: peaks,
-                progress: player.duration > 0 ? player.currentTime / player.duration : 0
+                progress: player.duration > 0 ? player.currentTime / player.duration : 0,
+                silences: silenceFractions
             ) { fraction in
-                player.seek(to: fraction * player.duration)
+                player.play(from: fraction * player.duration)
             }
-            Text(verbatim: "\(player.currentTime.clockText) / \(player.duration.clockText)")
-                .font(.system(size: 12))
-                .monospacedDigit()
-                .foregroundStyle(AppColors.textSecondary)
-            speedMenu
+            HStack(spacing: 12) {
+                playButton
+                Text(verbatim: "\(player.currentTime.clockText) / \(player.duration.clockText)")
+                    .font(.system(size: 12))
+                    .monospacedDigit()
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+                if speech != nil {
+                    silenceSwitch
+                    Spacer()
+                }
+                speedButton
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -79,28 +79,72 @@ struct RecordingEditor: View {
                 .fill(AppColors.card))
     }
 
-    private var speedMenu: some View {
-        Menu {
-            Picker("Speed", selection: $rate) {
-                ForEach(Self.rates, id: \.self) { Text("\(Self.format(rate: $0))×").tag($0) }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            Toggle("Autoplay", isOn: $autoplay)
-        } label: {
-            Text("\(Self.format(rate: rate))×")
-                .font(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(AppColors.text)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+    private var playButton: some View {
+        Button(action: player.togglePlayPause) {
+            Label(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill")
+                .labelStyle(.iconOnly)
+                .font(.system(size: 12))
+                .foregroundStyle(AppColors.accent)
+                .frame(width: 30, height: 30)
                 .background(
                     RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous)
-                        .fill(AppColors.button))
+                        .fill(AppColors.accentMuted))
+                .contentShape(RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous))
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .keyboardShortcut(.space, modifiers: .control)
+        .help(player.isPlaying ? "Pause (⌃Space)" : "Play (⌃Space)")
+    }
+
+    /// Silences as fractions of the recording, for the waveform; empty until the duration is known.
+    private var silenceFractions: [Range<Double>] {
+        guard let speech, player.duration > 0 else { return [] }
+        return speech.silences(duration: player.duration).map {
+            $0.lowerBound / player.duration..<$0.upperBound / player.duration
+        }
+    }
+
+    private var silenceSwitch: some View {
+        SegmentedGroup {
+            silenceCell(skips: true, symbol: "waveform.badge.minus", label: "No silences")
+            silenceCell(skips: false, symbol: "waveform", label: "Raw")
+        }
         .fixedSize()
+    }
+
+    private func silenceCell(skips: Bool, symbol: String, label: LocalizedStringKey) -> some View {
+        SegmentedCell(size: CGSize(width: 44, height: SegmentedMetrics.cell.height), isSelected: skipsSilences == skips) {
+            skipsSilences = skips
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .medium))
+                .accessibilityLabel(Text(label))
+        }
+        .help(Text(label))
+    }
+
+    /// Cycles through the speeds on each click; it keeps the widest speed's width, so the controls never shift.
+    private var speedButton: some View {
+        Button {
+            rate = Self.rate(after: rate)
+        } label: {
+            ZStack {
+                ForEach(Self.rates, id: \.self) { Text("\(Self.format(rate: $0))×").hidden() }
+                Text("\(Self.format(rate: rate))×")
+            }
+            .font(.system(size: 12, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(AppColors.text)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous)
+                    .fill(AppColors.button))
+            .contentShape(RoundedRectangle(cornerRadius: ControlCorners.button, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Playback speed")
     }
 
     private var bottomBar: some View {
@@ -133,11 +177,19 @@ struct RecordingEditor: View {
     private func arrive() async {
         actionError = nil
         peaks = nil
+        if !Self.rates.contains(rate) { rate = 1 }
+        speech = recording.readSpeechSpans()
+        player.skippedSilences = skipsSilences ? speech : nil
         player.setRate(rate)
-        player.load(recording.audio, autoplay: autoplay && shouldAutoplay())
+        player.load(recording.audio, autoplay: shouldAutoplay())
         editorFocused = true
         let computed = await Waveform.peaks(of: recording.audio)
         if !Task.isCancelled { peaks = computed.isEmpty ? nil : computed }
+    }
+
+    /// The speed after `rate` in `rates`, back to the first after the last one.
+    private static func rate(after rate: Double) -> Double {
+        rates.first { $0 > rate } ?? rates[0]
     }
 
     private static func format(rate: Double) -> String {

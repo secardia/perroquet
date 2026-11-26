@@ -57,7 +57,7 @@ struct MainWindow: View {
         .background(AppColors.background)
         .containerBackground(AppColors.background, for: .window)
         .preferredColorScheme(.dark)
-        .frame(minWidth: 700, minHeight: 360)
+        .frame(minWidth: 920, minHeight: 540)
         .task {
             await annotation.reload()
             await validated.reload()

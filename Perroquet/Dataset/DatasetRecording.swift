@@ -12,6 +12,13 @@ struct DatasetRecording: Identifiable, Equatable, Sendable {
     /// `audio.wav` or `audio.flac`, never `audio_original.*`.
     let audio: URL
 
+    /// Speech of the audio from `speech_spans.json` (written at save time or by `bench/speech_spans.sh`);
+    /// nil when the folder has none or it is unreadable.
+    func readSpeechSpans() -> SpeechSpans? {
+        guard let data = try? Data(contentsOf: folder.appending(path: SpeechSpans.fileName)) else { return nil }
+        return try? JSONDecoder().decode(SpeechSpans.self, from: data)
+    }
+
     private struct Infos: Decodable {
         let duration: TimeInterval
     }

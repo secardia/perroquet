@@ -97,6 +97,14 @@ final class DatasetStoreTests: XCTestCase {
         XCTAssertEqual(infos["createdAt"] as? Double, 1_000)
     }
 
+    func testInfosNameTheTrimmingWhenTheModelHeardTheSpeechOnly() throws {
+        var trimmed = record()
+        trimmed.trim = SpeechSpans.method
+        let recording = try store.addPending(samples: [Float](repeating: 0, count: 4_800), transcription: trimmed)
+        let infos = try json(recording.folder.appending(path: "infos.json"))
+        XCTAssertEqual(infos["trim"] as? String, SpeechSpans.method)
+    }
+
     func testStoredAudioKeepsTheSamples() throws {
         let recording = try store.addPending(samples: [0, 0.5, -0.5], transcription: record())
         let file = try AVAudioFile(forReading: recording.audio, commonFormat: .pcmFormatFloat32, interleaved: false)

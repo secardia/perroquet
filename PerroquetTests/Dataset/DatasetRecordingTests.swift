@@ -40,4 +40,18 @@ final class DatasetRecordingTests: XCTestCase {
         try FileManager.default.removeItem(at: recording.audio)
         XCTAssertNil(recording.readDuration())
     }
+
+    func testSpeechSpansAreNilWithoutAFile() throws {
+        let recording = try addPending(samples: 16000, reportedDuration: 1)
+        XCTAssertNil(recording.readSpeechSpans())
+    }
+
+    func testSpeechSpansAreStoredNextToTheRawAudio() throws {
+        let spans = try XCTUnwrap(SpeechSpans(detected: [1..<2, 5..<6], duration: 10))
+        let recording = try dataset.addPending(
+            samples: [Float](repeating: 0.1, count: 160_000), speechSpans: spans,
+            transcription: TranscriptionRecord(text: "t", duration: 10, modelIdentifier: "m"), id: "b")
+        XCTAssertEqual(recording.readSpeechSpans(), spans)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recording.folder.appending(path: "speech_spans.json").path))
+    }
 }

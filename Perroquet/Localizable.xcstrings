@@ -61,16 +61,6 @@
         }
       }
     },
-    "Autoplay": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lecture automatique"
-          }
-        }
-      }
-    },
     "Cancel shortcut": {
       "localizations": {
         "fr": {
@@ -441,6 +431,16 @@
         }
       }
     },
+    "No silences": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans blancs"
+          }
+        }
+      }
+    },
     "No validated dictations": {
       "localizations": {
         "fr": {
@@ -521,6 +521,16 @@
         }
       }
     },
+    "Playback speed": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitesse de lecture"
+          }
+        }
+      }
+    },
     "Press keys…": {
       "localizations": {
         "fr": {
@@ -547,6 +557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Quitter %@"
+          }
+        }
+      }
+    },
+    "Raw": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brut"
           }
         }
       }
@@ -617,16 +637,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Raccourcis"
-          }
-        }
-      }
-    },
-    "Speed": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vitesse"
           }
         }
       }

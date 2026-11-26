@@ -29,10 +29,16 @@ protocol TextPasting {
     func paste(_ text: String) async throws
 }
 
+/// Finds the speech of a dictation: the model transcribes only it, and the annotation player skips the rest.
+protocol SpeechDetecting: Sendable {
+    /// The speech of 16 kHz mono samples; nil when there is none or detection is unavailable.
+    func speechSpans(_ samples: [Float]) async -> SpeechSpans?
+}
+
 /// Persists a finished dictation.
 protocol RecordingStore: Sendable {
-    /// Stores the audio and its transcription.
-    func save(samples: [Float], transcription: TranscriptionRecord) throws
+    /// Stores the raw audio, its speech spans when known, and its transcription.
+    func save(samples: [Float], speechSpans: SpeechSpans?, transcription: TranscriptionRecord) throws
     /// Current transcription of the most recent stored recording, or nil when there is none.
     func latestText() -> String?
 }

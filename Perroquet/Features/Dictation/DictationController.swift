@@ -79,6 +79,7 @@ final class DictationController {
     private let transcriber: SpeechTranscribing
     private let paster: TextPasting
     private let store: RecordingStore
+    private let speechDetector: SpeechDetecting?
     private let defaults: UserDefaults
     private let cancelledDuration: Duration
     /// Called on the main actor each time `state` changes.
@@ -100,6 +101,7 @@ final class DictationController {
         transcriber: SpeechTranscribing,
         paster: TextPasting,
         store: RecordingStore,
+        speechDetector: SpeechDetecting? = nil,
         defaults: UserDefaults = .standard,
         cancelledDuration: Duration = .milliseconds(500)
     ) {
@@ -107,6 +109,7 @@ final class DictationController {
         self.transcriber = transcriber
         self.paster = paster
         self.store = store
+        self.speechDetector = speechDetector
         self.defaults = defaults
         self.cancelledDuration = cancelledDuration
         lastText = store.latestText() ?? ""
@@ -213,18 +216,24 @@ final class DictationController {
         pipeline = Task {
             let finished = await process(await stopped.value, generation: id)
             if id == generation { state = .idle }
-            if let finished, saveRecordings { await save(finished.samples, finished.record) }
+            if let finished, saveRecordings { await save(finished.samples, finished.speech, finished.record) }
         }
     }
 
     private func process(
         _ samples: [Float]?, generation id: Int
-    ) async -> (samples: [Float], record: TranscriptionRecord)? {
+    ) async -> (samples: [Float], speech: SpeechSpans?, record: TranscriptionRecord)? {
         guard let samples, samples.count >= Self.minimumSamples else { return nil }
 
+        // The model hears only the speech; the whole audio when none is found or detection is unavailable.
+        let speech = await speechDetector?.speechSpans(samples)
+        let spliced = speech?.spliced(samples)
+        let trimmed = spliced.map { $0.count >= Self.minimumSamples } ?? false
         var record: TranscriptionRecord
         do {
-            record = try await transcriber.transcribe(samples)
+            record = try await transcriber.transcribe(trimmed ? spliced ?? samples : samples)
+            record.duration = Double(samples.count) / Double(DatasetStore.sampleRate)
+            record.trim = trimmed ? SpeechSpans.method : nil
         } catch {
             if id == generation { message = String(localized: "Transcription failed: \(error.localizedDescription)") }
             return nil
@@ -241,13 +250,14 @@ final class DictationController {
         } catch {
             message = String(localized: "Could not paste: \(error.localizedDescription)")
         }
-        return (samples, record)
+        return (samples, speech, record)
     }
 
-    private func save(_ samples: [Float], _ record: TranscriptionRecord) async {
+    private func save(_ samples: [Float], _ speech: SpeechSpans?, _ record: TranscriptionRecord) async {
         let store = store
         do {
-            try await Task.detached { try store.save(samples: samples, transcription: record) }.value
+            try await Task.detached { try store.save(samples: samples, speechSpans: speech, transcription: record) }
+                .value
         } catch {
             message = String(localized: "Could not save the recording: \(error.localizedDescription)")
         }
