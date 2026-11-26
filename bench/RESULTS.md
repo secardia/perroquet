@@ -103,6 +103,52 @@ One-off check, code removed afterwards. The 2044 dictations that existed both ra
 
 Decision: the dataset now stores only raw audio. Any silence trimming is applied on the fly and benchmarked on annotated raw recordings.
 
+## Silence trimming (VAD) (2026-11-25)
+
+Question: does cutting silences before transcription give a lower WER than sending the whole audio, and is it worth the compute? Rule: a method is kept only if it beats full audio **significantly** in WER; otherwise the in-app trimming task is cancelled.
+
+**Protocol**
+- Set: the 184 validated recordings (46.7 min, 5688 reference words), of which 40 are annotated on raw audio (the subset where references were not made while listening to cut audio). Audio is read directly from the FLAC files.
+- ASR: same settings as the app (CoreML v3, int8 encoder, `cpuAndNeuralEngine`, `language: nil`, fresh decoder state per file), warmed up once. One transcription per file per variant, 65 variants, one run.
+- Methods:
+  - `full`: whole audio (baseline).
+  - Silero VAD (FluidAudio): model run once per file, then segmented per config; entry threshold t, exit threshold t − 0.15, `minSpeechDuration` 0.15 s, no forced split. Grid: t {0.5, 0.7, 0.85} × padding {0.1, 0.2, 0.3} × min silence {0.3, 0.75} s (18), plus 12 gentler variants (t 0.3 to 0.85, padding 0.3 to 1.0 s, min silence 0.75 to 3 s).
+  - FSMN-VAD (FluidAudio, fixed decision parameters): raw segments, plus padding {0.2, 0.3, 0.5} s (4).
+  - Energy gate (model-free): 30 ms frames, 10 ms hop, RMS in dBFS, noise floor = 10th percentile of the file, speech if ≥ floor + D dB. Runs closer than the min silence are merged, runs under 0.15 s dropped, then padded. Grid: D {6, 10, 15} × padding {0.1, 0.2, 0.3} × min silence {0.3, 0.75} (18), plus 12 gentler variants (D 3 to 10, padding 0.3 to 0.5, min silence 0.75 to 3).
+- Splice: spans clamped and merged, joined by 150 ms of zeros, no leading or trailing silence. No span means empty text and no ASR call.
+- Scoring: corpus WER and CER on normalized text (`harness.normalize`), WER split into substitutions / deletions / insertions. Significance: paired bootstrap over files (2000 resamples, seed 0, same resamples for both metrics) of WER(variant) − WER(full) and CER(variant) − CER(full); significant when the 95% CI excludes 0. Kept audio counts speech only (spliced length minus the 150 ms gaps).
+- Cost: trimming cost = VAD (model + segmentation, or the energy step) + splice, per file. Net gain = ASR time of `full` − ASR time of the variant − trimming cost. Timings come from a single run; ASR time of `full` varied by about 15% between three runs (19.7 s to 22.8 s), so gains below about 10% are within noise. The reported timings come from the last run.
+
+**Results (all 184 files, ranked by WER)**
+
+| Variant | WER | CER | S/D/I | ΔWER [95% CI] | ΔCER [95% CI] | Kept audio | Net gain |
+|---|---|---|---|---|---|---|---|
+| `fsmn-pad0.5` (best FSMN) | 6.07% | 3.28% | 171/70/104 | -0.23 pt [-0.74, +0.26] | -0.15 pt [-0.45, +0.14] | 78.0% | +16.9% |
+| `energy-db6-pad0.5-sil1.5` (best energy) | 6.15% | 3.32% | 182/71/97 | -0.14 pt [-0.58, +0.28] | -0.11 pt [-0.36, +0.13] | 95.8% | +3.7% |
+| `silero-t0.3-pad0.5-sil1.5` (best Silero) | 6.15% | 3.39% | 180/72/98 | -0.14 pt [-0.69, +0.43] | -0.05 pt [-0.35, +0.28] | 81.9% | +9.6% |
+| `full` | 6.29% | 3.44% | 187/68/103 | | | 100% | 0 |
+| `fsmn-pad0.3` | 6.59% | 3.59% | 202/80/93 | +0.30 pt [-0.56, +1.27] | +0.15 pt [-0.31, +0.67] | 73.0% | +20.3% |
+| `silero-t0.5-pad0.1-sil0.3` (app-like defaults) | 7.65% | 4.34% | 212/115/108 | +1.35 pt [+0.21, +2.77] * | +0.90 pt [+0.14, +1.86] * | 67.0% | +21.0% |
+| `fsmn` (no padding) | 8.56% | 4.74% | 254/122/111 | +2.27 pt [+0.57, +4.37] * | +1.30 pt [+0.32, +2.56] * | 62.6% | +26.1% |
+| `energy-db15-pad0.1-sil0.3` (most drastic) | 15.58% | 11.89% | 275/522/89 | +9.28 pt [+6.01, +13.13] * | +8.45 pt [+5.23, +12.11] * | 53.5% | +37.1% |
+
+\* 95% CI excludes 0 (significantly worse than `full`). Kept audio is the speech only, without the 150 ms splice gaps.
+
+Per-method grid summary (all files): Silero, 30 variants, WER 6.15% to 8.56%, 7 under full, 6 significantly worse; FSMN, 4 variants, 6.07% to 8.56%, 1 under full, 1 significantly worse; energy, 30 variants, 6.15% to 15.58%, 4 under full, 11 significantly worse (all of D = 15 dB, which also leaves 6 to 7 files with no speech detected).
+
+On the 40 raw-annotated files, `full` is 4.05% WER / 2.16% CER. The best variant there is `silero-t0.5-pad0.5-sil0.75` at 3.34% (-0.70 pt, CI [-2.19, +0.75]; CER -0.23 pt, CI [-0.94, +0.50]; not significant, 69.8% of audio kept); only `energy-db15-pad0.1-sil0.3` is significantly different (worse).
+
+Compute: trimming cost per file is 0.2 to 0.3 ms for energy, about 9 ms median for Silero (model, incl. segmentation) and for FSMN, against about 55 ms median ASR per file. By duration bucket, trimming does not pay off under 5 s (net -5% for Silero, -2% for FSMN-pad0.5, +2% for energy) and loses between 5 and 15 s (-11% for both models, +1% for energy); it pays only above 15 s (+17% Silero, +27% FSMN, +5% energy). Overall net gain is +4% to +17% for the gentle variants and +21% to +37% for the drastic ones.
+
+**Observations**
+- No variant beats full audio significantly. The best ones (padding 0.5 s) sit 0.1 to 0.25 pt under `full`, with CIs that comfortably include 0; that is noise at 5688 words.
+- Quality loss is monotonic with how much is cut: wider padding and longer min silence recover WER. Errors from aggressive cuts are mostly **deletions** (clipped words: `silero-t0.5-pad0.1-sil0.3` 115 vs 68 for full; energy 15 dB 522), with substitutions growing second; insertions stay flat (about 90 to 110), so trimming does not remove hallucinations in silences here.
+- Large padding (0.5 s) makes all three methods safe but then they keep 78% (FSMN), 82% (Silero) and 96% (energy) of the audio, so the speed gain is small and is mostly lost on short dictations.
+- The files that regress most (e.g. `20261125-085206`, `20260626-135147`) are repeated for all three methods: a short hesitation or an overlapping restart gets cut or merged differently.
+- The earlier finding that long dictations drift into English on cut audio was not reproduced as a gain: trimming raw audio did not lower WER on the long files either.
+
+**Decision rule outcome:** no variant is significantly better than full audio in WER or in CER (paired bootstrap on both), and several settings are significantly worse in both. Silence trimming is not kept for quality; the in-app trimming task is cancelled (at most a speed option for dictations over 15 s, with padding of 0.5 s or more, worth +17% to +27% on that bucket).
+
 ## Findings
 
 1. **CoreML on the ANE is the fastest and uses the least memory:** 162× real time, 39 ms for a clip under 5 s, about 730 MB in total, and the GPU stays free.
@@ -135,5 +181,7 @@ Then:
 ./run_all.sh      # speed, every variant
 ./run_sysmem.sh   # system-wide RAM
 ```
+
+Silence trimming: `python3 make_manifest_annotated.py` (writes `manifest_annotated.json`), then `swift build --package-path fluidbench -c release` and `./fluidbench/.build/release/trimbench manifest_annotated.json results/raw/trim` (about 25 min, downloads the Silero and FSMN models on first run), then `.venv-onnx/bin/python bench_trim.py > report.md`.
 
 OpenWhispr and Oriloq results come from `bench_openwhispr.py` and `bench_oriloq.py`, which need those apps running.
